@@ -1,3 +1,11 @@
+#include "linkedlist.h"
+#include "auction.h"
+
+int IDforNew=1;
+List_t* userList=malloc(sizeof(List_t));
+List_t* autionList=malloc(sizeof(List_t));
+List_t* jobQueue=malloc(sizeof(List_t));
+
 int main() {
     // when server is started:
     //      N job threads are created
