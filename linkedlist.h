@@ -1,3 +1,8 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <assert.h>
+#include <stdbool.h>
+
 typedef struct node {
     void* value;
     struct node* next;
