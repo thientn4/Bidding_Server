@@ -1,3 +1,5 @@
+// Abner Espinoza and Thien Nguyen
+
 #include "linkedlist.h"
 #include "auction.h"
 
