@@ -12,6 +12,7 @@ typedef struct auction {
     char* item_name;
     List_t* watching_users;
     int cur_bid_amount;
+    int min_bid_amount;
     int ID;
     int duration;
 } auction_t;
