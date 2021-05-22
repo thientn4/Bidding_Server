@@ -15,23 +15,18 @@ void printInstructions(){
 }
 
 // shared resources
-int auctionID = 1; 	// increment by one after using it  
-List_t* users; 		// list of users, each user being a struct
-List_t* auctions; 	// list of auctions, each auction being a struct
-List_t* jobQueue; 	// list of jobs, each 
-
-int ID_for_new;
+int auction_ID = 1;
 List_t* user_list;
-List_t* aution_list;
-List_t* job_queue;	// job buffer
-int num_job_thread=2;
-int tick_second=0;
-int server_port=-1;
-char* auction_file_name=NULL;
+List_t* auction_list;
+List_t* job_queue;		// job buffer
+
+int num_job_thread = 2;	// default number of job threads
+int tick_second = 0 ;	// default tick in seconds (when 0 -> tick for each stdin input)
+int server_port = -1;
+char* auction_file_name = NULL;
 
 
 int main(int argc, char* argv[]) {
-    //////////////////////////////////COLLECTING INFO FROM COMMAND INPUT////////////////////////////// THIEN
         if (argc < 3){
             printInstruction();
             if (argc == 2 && strcmp(argv[1], "-h") == 0)
@@ -70,7 +65,6 @@ int main(int argc, char* argv[]) {
             }
         }
   
-  	//////////////////////// SETUP GLOBAL VARIABLE AND PREFILL AUCTION LIST//////////////////////////// ABNER
   		// if auction_file_name == NULL, ignore
   		if (auction_file_name != NULL) {
           	// opens file, prefills auctions list
@@ -87,13 +81,16 @@ int main(int argc, char* argv[]) {
                 }
               	else if (i == 1) {
                   	strcpy(auc->file_name, cur);
+                  
+                  	auc->ID = auction_ID;
+                  	auctionID++;
                 }
               	else if (i == 2) {
                   	auc->duration = atoi(cur);
                 }
               	else {
                   	auc->min_bid_amount = atoi(cur);
-              		insertFront(auctions, (void*)auc);
+              		insertFront(auction_list, (void*)auc);
                 }
               	i++;
           	}
@@ -101,8 +98,6 @@ int main(int argc, char* argv[]) {
           	auc = NULL; 	// avoiding future error 
         }
   		
-
-    ///////////////////////////////////////////RUN SERVER///////////////////////////////////////////// BOTH
   	//      1 main thread
     //          loop to wait for client
     //              check username and password
@@ -121,7 +116,7 @@ int main(int argc, char* argv[]) {
     //      N job threads - consumer
     //              are created when server is started
     //              never terminate and is blocked when there are no jobs to process
-    //              will process jobs and deque in FIFO
+    //              will process jobs and dequeue in FIFO
     //      1 time thread (ticks the time left on running auctions - never terminate)
     //              counts down the auctions once every tick cycle
     //              look for ended auctions at the end of each tick
