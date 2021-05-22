@@ -92,7 +92,7 @@ int main(int argc, char* argv[]) {
                   	auc->duration = atoi(cur);
                 }
               	else {
-                  	auc->min_price = atoi(cur);
+                  	auc->min_bid_amount = atoi(cur);
               		insertFront(auctions, (void*)auc);
                 }
               	i++;
