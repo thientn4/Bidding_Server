@@ -28,7 +28,7 @@ char* auction_file_name = NULL;
 
 int main(int argc, char* argv[]) {
         if (argc < 3){
-            printInstruction();
+            printInstructions();
             if (argc == 2 && strcmp(argv[1], "-h") == 0)
               	return EXIT_SUCCESS;
             return EXIT_FAILURE;
@@ -40,13 +40,13 @@ int main(int argc, char* argv[]) {
         int iter;
         for(iter = 1; iter < argc-2; iter++) {
             if (strcmp(argv[iter], "-h") == 0) {
-                printInstruction();
+                printInstructions();
                 return EXIT_SUCCESS;
             }
             else if (strcmp(argv[iter], "-j") == 0) {
                 iter++;
                 if (iter >= argc-2) {
-                    printInstruction();
+                    printInstructions();
                     return EXIT_FAILURE;
                 }
                 num_job_thread = atoi(argv[iter]);
@@ -54,43 +54,48 @@ int main(int argc, char* argv[]) {
             else if (strcmp(argv[iter], "-t") == 0) {
                 iter++;
                 if(iter >= argc-2) {
-                    printInstruction();
+                    printInstructions();
                     return EXIT_FAILURE;
                 }
                 tick_second = atoi(argv[iter]);
             }
             else {
-                printInstruction();
+                printInstructions();
                 return EXIT_FAILURE;
             }
         }
   
+        auction_list = (List_t*)malloc(sizeof(List_t));
   		// if auction_file_name == NULL, ignore
   		if (auction_file_name != NULL) {
           	// opens file, prefills auctions list
-          	FILE* fp = fopen(auction_file_name, "r") 
-            if (fp == NULL)
+          	FILE* fp = fopen(auction_file_name, "r");
+            if (fp == NULL) {
                 return EXIT_FAILURE;
+            }
           	
           	int i = 1;
           	char* cur = (char*)malloc(sizeof(char));				// current row in file
           	auction_t* auc = (auction_t*)malloc(sizeof(auction_t));	// auction information
-          	while (fgets(cur, 100, fp) != EOF) {
+          	while (fgets(cur, 100, fp) != NULL) {
             	if ((i % 4) == 0) {
                 	auc = (auction_t*)malloc(sizeof(auction_t));
+                    i = 0;
                 }
               	else if (i == 1) {
-                  	strcpy(auc->file_name, cur);
+                  	char* temp_cur = (char*)malloc(sizeof(char) * (strlen(cur) + 1));
+                    strcpy(temp_cur, cur);
+                    auc->item_name = temp_cur;
                   
                   	auc->ID = auction_ID;
-                  	auctionID++;
+                  	auction_ID++;
                 }
               	else if (i == 2) {
                   	auc->duration = atoi(cur);
                 }
               	else {
                   	auc->min_bid_amount = atoi(cur);
-              		insertFront(auction_list, (void*)auc);
+              		insertRear(auction_list, (void*)auc);
                 }
               	i++;
           	}
