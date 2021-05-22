@@ -1,17 +1,17 @@
 typedef struct user {
     char* username;
     char* password;
-    List_t* wonAuctions;
-    List_t* listingAuctions;
+    List_t* won_auctions;
+    List_t* listing_auctions;
     int balance;
-    int fileDescriptor;
+    int file_descriptor;
 } user_t;
 
 typedef struct auction {
     user_t* creator;
-    char* itemName;
-    List_t* watchingUsers;
-    int curBidAmount;
+    char* item_name;
+    List_t* watching_users;
+    int cur_bid_amount;
     int ID;
-    int remainingTick;
+    int duration;
 } auction_t;
