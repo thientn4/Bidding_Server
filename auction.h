@@ -5,6 +5,7 @@ typedef struct user {
     List_t* listing_auctions;
     int balance;
     int file_descriptor;
+    int is_online;
 } user_t;
 
 typedef struct auction {
