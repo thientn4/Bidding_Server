@@ -63,10 +63,10 @@ void* tick_thread() {
     node_t* head = auction_list->head;
     node_t* current = head;
     while (current != NULL) { 
-      ((auction_t*)current->value)->duration = ((auction_t*)current->value)->duration - 1;
+      ((auction_t*)current->value)->duration = ((auction_t*)current->value)->duration - 1; //////I THINK YOU SHOULD DO ((auction_t*)(current->value)) instead (missing bracket)
       if (((auction_t*)current->value)->duration == 0) {
           current = current->next;
-          removeByIndex(auction_list, i); // removing by index isn't enough: I need to
+          removeByIndex(auction_list, i); // removing by index isn't enough: I need to FREE THE OLD AUCTION
       }
       else {
           current = current->next;
