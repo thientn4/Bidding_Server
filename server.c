@@ -148,11 +148,7 @@ int main(int argc, char* argv[]) {
           	char* cur = (char*)malloc(sizeof(char));				// current row in file
           	auction_t* auc = (auction_t*)malloc(sizeof(auction_t));	// auction information
           	while (fgets(cur, 100, fp) != NULL) {
-            	if ((i % 4) == 0) {
-                	auc = (auction_t*)malloc(sizeof(auction_t));
-                    i = 0;
-                }
-              	else if (i == 1) {
+              	if (i == 1) {
                   	char* temp_cur = (char*)malloc(sizeof(char) * (strlen(cur) + 1));
                     strcpy(temp_cur, cur);
                     auc->item_name = temp_cur;
@@ -163,9 +159,13 @@ int main(int argc, char* argv[]) {
               	else if (i == 2) {
                   	auc->duration = atoi(cur);
                 }
-              	else {
+              	else if (i == 3) {
                   	auc->min_bid_amount = atoi(cur);
               		insertRear(auction_list, (void*)auc);
+                }
+                else {
+                    auc = (auction_t*)malloc(sizeof(auction_t));
+                    i = 0;
                 }
               	i++;
           	}
