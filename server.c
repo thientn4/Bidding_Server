@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <pthread.h>
 #include <signal.h>
+#include <time.h>
 
 /////////////FOR SOCKET
     #include <getopt.h>
@@ -43,8 +44,43 @@ char* auction_file_name = NULL;
 int listen_fd; //server listening file directory
 char buffer[BUFFER_SIZE]; //to receive message from client
 
+			// void* clientfd_ptr
+void* tick_thread() {
+  // int client_fd = *(int*)clientfd_ptr;
+  
+  while(1) {
+    if (tick_second == 0) {
+      getchar();
+      // bzero(buffer, BUFFER_SIZE);
+      // received_size = read(client_fd, buffer, sizeof(buffer));
+    }
+    else 
+    	sleep(tick_second);
+
+    printf("ticked!\n");
+  
+    int i = 0;
+    node_t* head = auction_list->head;
+    node_t* current = head;
+    while (current != NULL) { 
+      ((auction_t*)current->value)->duration = ((auction_t*)current->value)->duration - 1;
+      if (((auction_t*)current->value)->duration == 0) {
+          current = current->next;
+          removeByIndex(auction_list, i); // removing by index isn't enough: I need to
+      }
+      else {
+          current = current->next;
+          i += 1;
+      }
+    } // end inner while
+  } // end outer while
+  
+  // close(client_fd);
+  
+} // end tick_thread
+
 /////////////////////////////////////INITIATE SOCKET IN SERVER//////////////////////////////////////////
-    int server_init(int server_port){
+int server_init(int server_port){
         int sockfd;
         struct sockaddr_in servaddr;
 
@@ -187,8 +223,10 @@ int main(int argc, char* argv[]) {
 
     /////////////////////////////////////////RUN SERVER////////////////////////////////////////////////
         //spawn tick thread and N job threads
-
-        user_list=malloc(sizeof(List_t));
+			//tick thread spawning
+  			//N job threads spawning
+  		//run server
+        user_list=(List_t*)malloc(sizeof(List_t));
         listen_fd = server_init(server_port); // Initiate server and start listening on specified port
         int client_fd;
         struct sockaddr_in client_addr;
@@ -207,6 +245,7 @@ int main(int argc, char* argv[]) {
             }
             else{
                 printf("Client connetion accepted\n");
+                bzero(buffer, BUFFER_SIZE);
                 read(*client_fd, buffer, BUFFER_SIZE);
                 char* msgbody = buffer+8;
                 char* username_check=msgbody;
@@ -222,13 +261,23 @@ int main(int argc, char* argv[]) {
 
                 int is_new_account=1;
 
-                node_t* user_iter=user_list->head;
+                //node_t* user_iter=user_list->head;
+                node_t* head = user_list->head;
+    			node_t* user_iter = head;
                 while(user_iter!=NULL){
                     user_t* cur_user=(user_t*)user_iter->value;
+                    printf("+++++++++++++++++++checking for username: %s\n",cur_user->username);
                     if(strcmp(cur_user->username,username_check)==0){
+                        printf("%s = %s\n",cur_user->username,username_check);
                         if(strcmp(cur_user->password,password_check)!=0 || cur_user->is_online==1){
                             //reject connection
-                            printf("account is being used or incorrect password\n");
+                            if(strcmp(cur_user->password,password_check)!=0){
+                                printf("%s = %s\n",cur_user->password,password_check);
+                                printf("incorrect password\n");
+                            }
+                            if (cur_user->is_online==1){
+                                printf("account is being used\n");
+                            }
                         }else{
                             //create client thread
                             printf("existing account logged in\n");
@@ -249,7 +298,7 @@ int main(int argc, char* argv[]) {
                         new_user->file_descriptor=*client_fd;
                         new_user->balance=0;
                         new_user->is_online=1;
-                        insertFront(user_list,(void*)new_user);
+                        insertFront(user_list,new_user);
                     //create client thread with client_fd as argument to continue communication
                         printf("new account logged in\n");
                 }
@@ -287,3 +336,4 @@ int main(int argc, char* argv[]) {
 
   	return 0;
 }
+
