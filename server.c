@@ -1,11 +1,3 @@
-#include "linkedlist.h"
-#include "auction.h"
-#include <string.h>
-#include <stdio.h>
-#include <pthread.h>
-#include <signal.h>
-#include <time.h>
-
 /////////////FOR SOCKET
     #include <getopt.h>
     #include <netdb.h>
@@ -18,8 +10,17 @@
     #include <sys/types.h>
     #include <sys/wait.h>
     #include <unistd.h>
+
     #define BUFFER_SIZE 1024
     #define SA struct sockaddr
+
+#include "linkedlist.h"
+#include "auction.h"
+#include <string.h>
+#include <stdio.h>
+#include <pthread.h>
+#include <signal.h>
+#include <time.h>
 
 void printInstructions(){
     printf("./bin/zbid_server [-h] [-j N] [-t M] PORT_NUMBER AUCTION_FILENAME.\n\n");
@@ -28,6 +29,19 @@ void printInstructions(){
     printf("-t M                M seconds between time ticks. If option not specified, default is to wait on input from stdin to indicate a tick.\n");
     printf("PORT_NUMBER         Port number to listen on.\n");
     printf("AUCTION_FILENAME    File to read auction item information from at the start of the server.\n");
+}
+
+char* myStrcpy(char* source){
+    char* to_return=malloc(1);
+    int size=1;
+    while(*source!='\0'){
+        *(to_return+size-1)=*source;
+        to_return=realloc(to_return,size+1);
+        source++;
+        size++;
+    }
+    *(to_return+size)='\0';
+    return to_return;
 }
 
 // shared resources
@@ -44,43 +58,8 @@ char* auction_file_name = NULL;
 int listen_fd; //server listening file directory
 char buffer[BUFFER_SIZE]; //to receive message from client
 
-			// void* clientfd_ptr
-void* tick_thread() {
-  // int client_fd = *(int*)clientfd_ptr;
-  
-  while(1) {
-    if (tick_second == 0) {
-      getchar();
-      // bzero(buffer, BUFFER_SIZE);
-      // received_size = read(client_fd, buffer, sizeof(buffer));
-    }
-    else 
-    	sleep(tick_second);
-
-    printf("ticked!\n");
-  
-    int i = 0;
-    node_t* head = auction_list->head;
-    node_t* current = head;
-    while (current != NULL) { 
-      ((auction_t*)current->value)->duration = ((auction_t*)current->value)->duration - 1; //////I THINK YOU SHOULD DO ((auction_t*)(current->value)) instead (missing bracket)
-      if (((auction_t*)current->value)->duration == 0) {
-          current = current->next;
-          removeByIndex(auction_list, i); // removing by index isn't enough: I need to FREE THE OLD AUCTION
-      }
-      else {
-          current = current->next;
-          i += 1;
-      }
-    } // end inner while
-  } // end outer while
-  
-  // close(client_fd);
-  
-} // end tick_thread
-
 /////////////////////////////////////INITIATE SOCKET IN SERVER//////////////////////////////////////////
-int server_init(int server_port){
+    int server_init(int server_port){
         int sockfd;
         struct sockaddr_in servaddr;
 
@@ -124,6 +103,42 @@ int server_init(int server_port){
 
         return sockfd;
     }
+
+////////////////////////////////////////TICK THREAD////////////////////////////////////////////////////
+
+void* tick_thread() {
+  // int client_fd = *(int*)clientfd_ptr;
+  
+  while(1) {
+    if (tick_second == 0) {
+      getchar();
+      // bzero(buffer, BUFFER_SIZE);
+      // received_size = read(client_fd, buffer, sizeof(buffer));
+    }
+    else 
+    	sleep(tick_second);
+
+    printf("ticked!\n");
+  
+    int i = 0;
+    node_t* head = auction_list->head;
+    node_t* current = head;
+    while (current != NULL) { 
+      ((auction_t*)(current->value))->duration = ((auction_t*)(current->value))->duration - 1;
+      if (((auction_t*)(current->value))->duration == 0) {
+          current = current->next;
+          removeByIndex(auction_list, i); // removing by index isn't enough: I need to free
+      }
+      else {
+          current = current->next;
+          i += 1;
+      }
+    } // end inner while
+  } // end outer while
+  
+  // close(client_fd);
+  
+} // end tick_thread
 
 
 
@@ -184,7 +199,11 @@ int main(int argc, char* argv[]) {
           	char* cur = (char*)malloc(sizeof(char));				// current row in file
           	auction_t* auc = (auction_t*)malloc(sizeof(auction_t));	// auction information
           	while (fgets(cur, 100, fp) != NULL) {
-              	if (i == 1) {
+            	if ((i % 4) == 0) {
+                	auc = (auction_t*)malloc(sizeof(auction_t));
+                    i = 0;
+                }
+              	else if (i == 1) {
                   	char* temp_cur = (char*)malloc(sizeof(char) * (strlen(cur) + 1));
                     strcpy(temp_cur, cur);
                     auc->item_name = temp_cur;
@@ -195,13 +214,9 @@ int main(int argc, char* argv[]) {
               	else if (i == 2) {
                   	auc->duration = atoi(cur);
                 }
-              	else if (i == 3) {
+              	else {
                   	auc->min_bid_amount = atoi(cur);
               		insertRear(auction_list, (void*)auc);
-                }
-                else {
-                    auc = (auction_t*)malloc(sizeof(auction_t));
-                    i = 0;
                 }
               	i++;
           	}
@@ -223,9 +238,8 @@ int main(int argc, char* argv[]) {
 
     /////////////////////////////////////////RUN SERVER////////////////////////////////////////////////
         //spawn tick thread and N job threads
-			//tick thread spawning
-  			//N job threads spawning
-  		//run server
+            pthread_t tickID;
+            pthread_create(&tickID, NULL, tick_thread, NULL); 
         user_list=(List_t*)malloc(sizeof(List_t));
         listen_fd = server_init(server_port); // Initiate server and start listening on specified port
         int client_fd;
@@ -261,18 +275,13 @@ int main(int argc, char* argv[]) {
 
                 int is_new_account=1;
 
-                //node_t* user_iter=user_list->head;
-                node_t* head = user_list->head;
-    			node_t* user_iter = head;
+    			node_t* user_iter = user_list->head;
                 while(user_iter!=NULL){
                     user_t* cur_user=(user_t*)user_iter->value;
-                    printf("+++++++++++++++++++checking for username: %s\n",cur_user->username);
                     if(strcmp(cur_user->username,username_check)==0){
-                        printf("%s = %s\n",cur_user->username,username_check);
                         if(strcmp(cur_user->password,password_check)!=0 || cur_user->is_online==1){
                             //reject connection
                             if(strcmp(cur_user->password,password_check)!=0){
-                                printf("%s = %s\n",cur_user->password,password_check);
                                 printf("incorrect password\n");
                             }
                             if (cur_user->is_online==1){
@@ -291,14 +300,14 @@ int main(int argc, char* argv[]) {
                 if(is_new_account==1){
                     //create new user and add to user list
                         user_t* new_user=malloc(sizeof(user_t));
-                        new_user->username=username_check;
-                        new_user->password=password_check;
+                        new_user->username=myStrcpy(username_check);
+                        new_user->password=myStrcpy(password_check);
                         new_user->won_auctions=malloc(sizeof(List_t));
                         new_user->listing_auctions=malloc(sizeof(List_t));
                         new_user->file_descriptor=*client_fd;
                         new_user->balance=0;
                         new_user->is_online=1;
-                        insertFront(user_list,new_user);
+                        insertRear(user_list,new_user);
                     //create client thread with client_fd as argument to continue communication
                         printf("new account logged in\n");
                 }
@@ -336,4 +345,3 @@ int main(int argc, char* argv[]) {
 
   	return 0;
 }
-
