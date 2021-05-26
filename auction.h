@@ -17,3 +17,9 @@ typedef struct auction {
     int ID;
     int duration;
 } auction_t;
+
+typedef struct job{
+    petr_header* job_protocol;  //type of job to decide what to do
+    char* job_body;             //extra argument if needed for job such as auction creating
+    user_t* requestor;           //to send result to the client requesting the job
+}job_t;
