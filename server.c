@@ -141,6 +141,14 @@ void* tick_thread() {
   
 } // end tick_thread
 
+////////////////////////////////////////CLIENT THREAD//////////////////////////////////////////////////
+
+void* client_thread(void* client_fd_ptr){
+    int* client_fd=(int*)client_fd_ptr;
+    while(1){
+        
+    }
+}
 
 
 int main(int argc, char* argv[]) {
@@ -303,6 +311,8 @@ int main(int argc, char* argv[]) {
                                 to_send->msg_type=0x00;
                                 wr_msg(*client_fd,to_send,NULL);
                             //create client thread
+                                pthread_t clientID;
+                                pthread_create(&clientID, NULL, client_thread, (void*)client_fd); 
                                 printf("existing account logged in\n");
                         }
                         is_new_account=0;
@@ -327,6 +337,8 @@ int main(int argc, char* argv[]) {
                         to_send->msg_type=0x00;
                         wr_msg(*client_fd,to_send,NULL);
                     //create client thread with client_fd as argument to continue communication
+                        pthread_t clientID;
+                        pthread_create(&clientID, NULL, client_thread, (void*)client_fd); 
                         printf("new account logged in\n");
                 }
                 
