@@ -142,13 +142,95 @@ void* tick_thread() {
 } // end tick_thread
 
 ////////////////////////////////////////CLIENT THREAD//////////////////////////////////////////////////
+/*
+short-lived client threads - producer after successful login
+            read jobs from protocal messages sent from clients via socket
+            insert jobs into queue to be handled in job threads
+            clean up and terminate when client terminates the connection
+*/
+void* client_thread(void* client_ptr){
+    user_t* client=(user_t*)client_ptr;
+    int received_size;
 
-void* client_thread(void* client_fd_ptr){
-    int* client_fd=(int*)client_fd_ptr;
     while(1){
-        
+        sleep(1);
+        printf("%s is in this thread\n",client->username);
     }
 }
+
+//////////////////////////////////////////JOB THREAD///////////////////////////////////////////////////
+/*
+N job threads - consumer
+            are created when server is started
+            never terminate and is blocked when there are no jobs to process
+            will process jobs and dequeue in FIFO
+*/
+void* job_thread(){
+    while(1){
+        if(job_queue->length!=0){
+            //get the top job and dequeue
+                job_t* cur_job=(job_t*)removeFront(job_queue);
+            //if job is to create new auction
+                //if duration<1 or max_bid<0 or item_name is empty
+                    //respond to client with EINVALIDARG
+                //else
+                    //malloc new job
+                    //set item_name
+                    //set duration
+                    //set maximum bid
+                    //respond to client with ANCREATE and new auction's ID
+            //if job is to list all currently running auctions
+                //message body contains jobs with info in the order:
+                    //auction ID; item_name; current_highest_bid; number_of_watchers; number of cycles remaining\n --> repeated
+                    //auctions must be ordered by lexicographically ascending (sort by auction_id)
+            //if job is to watch an auction
+                //if provided auction_id does not exist
+                    //respond to client with EANOTFOUND
+                //else
+                    //if auction reached a maximum number of watchers (ignore if we support infinite watchers) --> should ask professor again
+                        //respond to client with EANFULL
+                    //else
+                        //add requester to auction's watcher_list
+                        //respond to client with ANWATCH and name of item
+            //if job is to leave or stop watching an auctions
+                //if provided auction_id does not exist
+                    //respond to client with EANOTFOUND
+                //else
+                    //if requester is in watcher_list of item
+                        //remove requester from watcher_list
+                    //respond to client with OK or 0x00
+            //if job is to make a bid
+                //if provided auction_id does not exist
+                    //respond to client with EANOTFOUND
+                //else
+                    //if user is not watching this item
+                        //respond to clietn with EANDENIED
+                    //if user is both requester and creator of this item
+                        //respond to client with EANDENIED
+                    //if user's bid is lower than current bid
+                        //respond to client with EBIDLOW
+                    //if valid
+                        //update current highest bid and bidder of item
+                        //respond to client with OK
+                        //send ANUPDATE to all other watchers of the item
+            //if job is to list all active user
+                //the requestor is not included in the list of active user
+                //message body will be in format username1-->newline-->username2-->newline-->...
+            //if job is to list all won auctions of the sender
+                //the message body will be in format:
+                    //auction_id;item_name;winning_bid\n --> repeated
+                    //responded list must be lexicographically ascending by auction_id
+            //if job is to list of all created auctions of the sender
+                //the message body will be in format:
+                    //auction_id;item_name;winning_user;winning_bid\n --> repeated
+                    //responded list must be lexicographically ascending by auction_id
+            //if job is to show the balance of the sender
+                //respond to client with message body:
+                    //balance = total sold - total bought
+        }
+    }
+}
+
 
 
 int main(int argc, char* argv[]) {
@@ -249,7 +331,14 @@ int main(int argc, char* argv[]) {
         //spawn tick thread and N job threads
             pthread_t tickID;
             pthread_create(&tickID, NULL, tick_thread, NULL); 
+            int iter_job=0;
+            while(iter_job<num_job_thread){
+                pthread_t job_thread_ID;
+                pthread_create(&job_thread_ID, NULL, job_thread, NULL);
+                iter_job++;
+            }
         user_list=(List_t*)malloc(sizeof(List_t));
+        job_queue=(List_t*)malloc(sizeof(List_t));
         listen_fd = server_init(server_port); // Initiate server and start listening on specified port
         int client_fd;
         struct sockaddr_in client_addr;
@@ -306,13 +395,14 @@ int main(int argc, char* argv[]) {
                                     printf("account is being used\n");
                             }
                         }else{
+                                cur_user->file_descriptor=*client_fd;
                             //send message with type=0x00 and name=OK
                                 to_send->msg_len=0;
                                 to_send->msg_type=0x00;
                                 wr_msg(*client_fd,to_send,NULL);
                             //create client thread
                                 pthread_t clientID;
-                                pthread_create(&clientID, NULL, client_thread, (void*)client_fd); 
+                                pthread_create(&clientID, NULL, client_thread, (void*)cur_user); 
                                 printf("existing account logged in\n");
                         }
                         is_new_account=0;
@@ -338,7 +428,7 @@ int main(int argc, char* argv[]) {
                         wr_msg(*client_fd,to_send,NULL);
                     //create client thread with client_fd as argument to continue communication
                         pthread_t clientID;
-                        pthread_create(&clientID, NULL, client_thread, (void*)client_fd); 
+                        pthread_create(&clientID, NULL, client_thread, (void*)new_user); 
                         printf("new account logged in\n");
                 }
                 
