@@ -14,6 +14,7 @@
     #define BUFFER_SIZE 1024
     #define SA struct sockaddr
 
+#include "protocol.h"
 #include "linkedlist.h"
 #include "auction.h"
 #include <string.h>
@@ -274,6 +275,7 @@ int main(int argc, char* argv[]) {
                 printf("------------------------password received: %s\n",password_check);
 
                 int is_new_account=1;
+                petr_header* to_send=malloc(sizeof(petr_header));//////////////////////remember to free this
 
     			node_t* user_iter = user_list->head;
                 while(user_iter!=NULL){
@@ -282,14 +284,26 @@ int main(int argc, char* argv[]) {
                         if(strcmp(cur_user->password,password_check)!=0 || cur_user->is_online==1){
                             //reject connection
                             if(strcmp(cur_user->password,password_check)!=0){
-                                printf("incorrect password\n");
+                                //send message with type=0x1B and name=EWRNGPWD
+                                    to_send->msg_len=0;
+                                    to_send->msg_type=0x1B;
+                                    wr_msg(*client_fd,to_send,NULL);
+                                    printf("incorrect password\n");
                             }
-                            if (cur_user->is_online==1){
-                                printf("account is being used\n");
+                            else if (cur_user->is_online==1){
+                                //send message with type=0x1A and name=EUSRLGDIN
+                                    to_send->msg_len=0;
+                                    to_send->msg_type=0x1A;
+                                    wr_msg(*client_fd,to_send,NULL);
+                                    printf("account is being used\n");
                             }
                         }else{
+                            //send message with type=0x00 and name=OK
+                                to_send->msg_len=0;
+                                to_send->msg_type=0x00;
+                                wr_msg(*client_fd,to_send,NULL);
                             //create client thread
-                            printf("existing account logged in\n");
+                                printf("existing account logged in\n");
                         }
                         is_new_account=0;
                         break;
@@ -308,6 +322,10 @@ int main(int argc, char* argv[]) {
                         new_user->balance=0;
                         new_user->is_online=1;
                         insertRear(user_list,new_user);
+                    //send message with type=0x00 and name=OK
+                        to_send->msg_len=0;
+                        to_send->msg_type=0x00;
+                        wr_msg(*client_fd,to_send,NULL);
                     //create client thread with client_fd as argument to continue communication
                         printf("new account logged in\n");
                 }
