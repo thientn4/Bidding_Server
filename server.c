@@ -188,30 +188,22 @@ short-lived client threads - producer after successful login
 */
 void* client_thread(void* user_ptr){
     user_t* user = (user_t*)user_ptr;
-    printf("file descriptor in thread = %d\n", user->file_descriptor);
+    printf("file descriptor in thread = %d\n",user->file_descriptor);
 
-  	int cont = 1;
-    while(cont) {
+    while(1) {
       	job_t* job = (job_t*)malloc(sizeof(job_t));
-      	job->job_protocol = (petr_header*)malloc(sizeof(petr_header));
   		job->requestor = user;
-      
+        job->job_protocol=malloc(sizeof(petr_header));
         int err = rd_msgheader(user->file_descriptor, job->job_protocol);
       	if (err == 0) {
-          	petr_header* return_msg = (petr_header*)malloc(sizeof(petr_header));
-            return_msg->msg_len = 0;
-            return_msg->msg_type = 0x00;
-            wr_msg(user->file_descriptor, return_msg, NULL);
-          	free(return_msg);
-          
             if (job->job_protocol->msg_type == 0x11){ 
-                printf("%s has logged out\n", user->username);
-                cont = 0;
+                printf("%s have logged out\n",user->username);
+                break;
             }
             else {
-              	printf("%s\n", job->job_body);
-                job->job_body = (void*)job->job_protocol + 8;
-                insertRear(job_queue, job);
+              job->job_body = (void*)job->job_protocol + 8;
+              printf("%s\n",job->job_body);
+              insertRear(job_queue, job);
             } // end else
         } // end if
     } // end while
@@ -219,7 +211,6 @@ void* client_thread(void* user_ptr){
     close(user->file_descriptor);
     return NULL;
 }
-
 
 //////////////////////////////////////////JOB THREAD///////////////////////////////////////////////////
 /*
@@ -286,7 +277,7 @@ void* job_thread(){
                 //message body contains jobs with info in the order:
                     //auction ID; item_name; current_highest_bid; number_of_watchers; number of cycles remaining\n --> repeated
                     //auctions must be ordered by lexicographically ascending (sort by auction_id)
-            //if job is to watch an auction----------------------------------------------------------------->ABNER
+            //if job is to watch an auction-------------------------------------------------------------->FOR ABNER TO CHOOSE
                 //if provided auction_id does not exist
                     //respond to client with EANOTFOUND
                 //else
@@ -295,7 +286,7 @@ void* job_thread(){
                     //else
                         //add requester to auction's watcher_list
                         //respond to client with ANWATCH and name of item
-            //if job is to leave or stop watching an auctions----------------------------------------------------------------->ABNER
+            //if job is to leave or stop watching an auctions-------------------------------------------------------------->FOR ABNER TO CHOOSE
                 //if provided auction_id does not exist
                     //respond to client with EANOTFOUND
                 //else
@@ -356,9 +347,8 @@ void* job_thread(){
                         }
                     }
                 }
-            }           //send ANUPDATE to all other watchers of the item
             }
-            //if job is to list all active user----------------------------------------------------------------->ABNER
+            //if job is to list all active user-------------------------------------------------------------->FOR ABNER TO CHOOSE
                 //the requestor is not included in the list of active user
                 //message body will be in format username1-->newline-->username2-->newline-->...
             //if job is to list all won auctions of the sender
@@ -369,7 +359,7 @@ void* job_thread(){
                 //the message body will be in format:
                     //auction_id;item_name;winning_user;winning_bid\n --> repeated
                     //responded list must be lexicographically ascending by auction_id
-            //if job is to show the balance of the sender----------------------------------------------------------------->ABNER
+            //if job is to show the balance of the sender-------------------------------------------------------------->FOR ABNER TO CHOOSE
                 //respond to client with message body:
                     //balance = total sold - total bought
         }
@@ -423,7 +413,6 @@ int main(int argc, char* argv[]) {
 
     ////////////////////////////////PREFILLING LIST AND INITIALISE GLOBAL VAR/////////////////////////////
         auction_list = (List_t*)malloc(sizeof(List_t));
-  		auction_list = (List_t*)malloc(sizeof(List_t));
   		// if auction_file_name == NULL, ignore
   		if (auction_file_name != NULL) {
           	// opens file, prefills auctions list
@@ -436,7 +425,11 @@ int main(int argc, char* argv[]) {
           	char* cur = (char*)malloc(sizeof(char));				// current row in file
           	auction_t* auc = (auction_t*)malloc(sizeof(auction_t));	// auction information
           	while (fgets(cur, 100, fp) != NULL) {
-              	if (i == 1) {
+            	if ((i % 4) == 0) {
+                	auc = (auction_t*)malloc(sizeof(auction_t));
+                    i = 0;
+                }
+              	else if (i == 1) {
                   	char* temp_cur = (char*)malloc(sizeof(char) * (strlen(cur) + 1));
                     strcpy(temp_cur, cur);
                     auc->item_name = temp_cur;
@@ -446,14 +439,11 @@ int main(int argc, char* argv[]) {
                 }
               	else if (i == 2) {
                   	auc->duration = atoi(cur);
+                    if(tick_second!=0)auc->duration*=tick_second; //////////////////// to be suitable with tick thread functionality 
                 }
-              	else if (i == 3) {
-                  	auc->min_bid_amount = atoi(cur);
+              	else {
+                  	auc->max_bid_amount = atoi(cur);
               		insertRear(auction_list, (void*)auc);
-                }
-                else {
-                    auc = (auction_t*)malloc(sizeof(auction_t));
-                    i = 0;
                 }
               	i++;
           	}
@@ -542,6 +532,7 @@ int main(int argc, char* argv[]) {
                             }
                         }else{
                                 cur_user->file_descriptor=*client_fd;
+                                cur_user->is_online=1;
                             //send message with type=0x00 and name=OK
                                 to_send->msg_len=0;
                                 to_send->msg_type=0x00;
@@ -574,6 +565,7 @@ int main(int argc, char* argv[]) {
                         wr_msg(*client_fd,to_send,NULL);
                     //create client thread with client_fd as argument to continue communication
                         pthread_t clientID;
+                        printf("file descriptor in main: %d\n",new_user->file_descriptor);
                         pthread_create(&clientID, NULL, client_thread, (void*)new_user); 
                         printf("new account logged in\n");
                 }
