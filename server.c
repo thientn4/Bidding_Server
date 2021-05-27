@@ -23,6 +23,8 @@
 #include <signal.h>
 #include <time.h>
 
+/////////////////////////////////////HELPER FUNCTION AND GLOBAL VAR//////////////////////////////////////////
+
 void printInstructions(){
     printf("./bin/zbid_server [-h] [-j N] [-t M] PORT_NUMBER AUCTION_FILENAME.\n\n");
     printf("-h                  Displays this help menu, and returns EXIT_SUCCESS.\n");
@@ -45,11 +47,46 @@ char* myStrcpy(char* source){
     return to_return;
 }
 
+char* intToStr(int source){
+    char* to_return=malloc(1);
+    if(source==0){
+        *to_return='0';
+        *(to_return+1)='\0';
+        return to_return;
+    }
+    int size=1;
+    while(source!=0){
+        *(to_return+size-1)=source%10+48;
+        to_return=realloc(to_return,size+1);
+        source/=10;
+        size++;
+    }
+    int iter_flip=0;
+    while(iter_flip<(size-1)/2){
+        char holder=*(to_return+iter_flip);
+        *(to_return+iter_flip)=*(to_return+size-2-iter_flip);
+        *(to_return+size-2-iter_flip)=holder;
+        iter_flip++;
+    }
+    *(to_return+size)='\0';
+    return to_return;
+}
+
 // shared resources
 int auction_ID = 1;
 List_t* user_list;
 List_t* auction_list;
 List_t* job_queue;		// job buffer
+
+auction_t* searchAuction(int search_ID){
+    node_t* iter=auction_list->head;
+    while(iter!=NULL){
+        auction_t* cur_auc=(auction_t*)(iter->value);
+        if(cur_auc->ID==search_ID)return cur_auc;
+        iter=iter->next;
+    }
+    return NULL;
+}
 
 int num_job_thread = 2;	// default number of job threads
 int tick_second = 0 ;	// default tick in seconds (when 0 -> tick for each stdin input)
@@ -166,19 +203,58 @@ N job threads - consumer
             will process jobs and dequeue in FIFO
 */
 void* job_thread(){
+    petr_header* to_send=malloc(sizeof(petr_header));//////////////////////remember to free this
     while(1){
+        sleep(0.00005); ////////////////////////I got segfault if I dont have this line --> not sure why
         if(job_queue->length!=0){
             //get the top job and dequeue
-                job_t* cur_job=(job_t*)removeFront(job_queue);
+                job_t* cur_job=(job_t*)removeFront(job_queue);////////////////////remember to free this
             //if job is to create new auction
+            if(cur_job->job_protocol->msg_type==0x20){
+                char* new_item_iter=cur_job->job_body;
+                char* new_item_name=cur_job->job_body;
+                    while(*new_item_iter!='\n')new_item_iter++;
+                    *(new_item_iter-1)='\0';
+                char* new_item_duration_str=new_item_iter+1;
+                    while(*new_item_iter!='\n')new_item_iter++;
+                    *(new_item_iter-1)='\0';
+                char* new_item_max_str=new_item_iter+1;
+                new_item_name=myStrcpy(new_item_name);
+                int new_item_duration=atoi(new_item_duration_str);
+                int new_item_max=atoi(new_item_max_str);
                 //if duration<1 or max_bid<0 or item_name is empty
+                if(new_item_duration<1||new_item_max<0||new_item_name==NULL||*new_item_name=='\0'){
                     //respond to client with EINVALIDARG
+                        to_send->msg_len=0;
+                        to_send->msg_type=0x2F;
+                        wr_msg(cur_job->requestor->file_descriptor,to_send,NULL);
+                }
                 //else
-                    //malloc new job
+                else{
+                    //malloc new auction
+                        auction_t* new_auction=malloc(sizeof(auction_t));
                     //set item_name
+                        new_auction->item_name=new_item_name;
                     //set duration
+                        new_auction->duration=new_item_duration;////////////////////////wait for confirmation of change in tick thread
                     //set maximum bid
+                        new_auction->max_bid_amount=new_item_max;
+                    //set other info
+                        new_auction->watching_users=malloc(sizeof(List_t));
+                        new_auction->creator=cur_job->requestor;
+                        new_auction->cur_bid_amount=0;
+                        new_auction->ID=auction_ID;
+                  	    auction_ID++;
+                    //add new auction
+                        insertFront(auction_list,(void*)new_auction);
                     //respond to client with ANCREATE and new auction's ID
+                        char* ID_to_send=intToStr(new_auction->ID);    /////////////remember to convert ID from int to string
+                        to_send->msg_len=strlen(ID_to_send);
+                        to_send->msg_type=0x20;
+                        wr_msg(cur_job->requestor->file_descriptor,to_send,ID_to_send);
+                        free(ID_to_send);
+                }
+            }
             //if job is to list all currently running auctions
                 //message body contains jobs with info in the order:
                     //auction ID; item_name; current_highest_bid; number_of_watchers; number of cycles remaining\n --> repeated
@@ -200,6 +276,7 @@ void* job_thread(){
                         //remove requester from watcher_list
                     //respond to client with OK or 0x00
             //if job is to make a bid
+            if(cur_job->job_protocol->msg_type==0x26){
                 //if provided auction_id does not exist
                     //respond to client with EANOTFOUND
                 //else
@@ -213,6 +290,7 @@ void* job_thread(){
                         //update current highest bid and bidder of item
                         //respond to client with OK
                         //send ANUPDATE to all other watchers of the item
+            }
             //if job is to list all active user
                 //the requestor is not included in the list of active user
                 //message body will be in format username1-->newline-->username2-->newline-->...
@@ -306,7 +384,7 @@ int main(int argc, char* argv[]) {
                   	auc->duration = atoi(cur);
                 }
               	else {
-                  	auc->min_bid_amount = atoi(cur);
+                  	auc->max_bid_amount = atoi(cur);
               		insertRear(auction_list, (void*)auc);
                 }
               	i++;
