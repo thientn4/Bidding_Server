@@ -23,7 +23,24 @@
 #include <signal.h>
 #include <time.h>
 
-/////////////////////////////////////HELPER FUNCTION AND GLOBAL VAR//////////////////////////////////////////
+//////////////////////////////////////////////////SHARED RESOURCE///////////////////////////////////////////////
+
+int auction_ID = 1;
+List_t* user_list;
+List_t* auction_list;
+List_t* job_queue;		// job buffer
+
+int num_job_thread = 2;	// default number of job threads
+int tick_second = 0 ;	// default tick in seconds (when 0 -> tick for each stdin input)
+int server_port = -1;
+char* auction_file_name = NULL;
+
+int listen_fd; //server listening file directory
+char buffer[BUFFER_SIZE]; //to receive message from client
+
+user_t* server_fake;
+
+///////////////////////////////////////////////////HELPER FUNCTION///////////////////////////////////////////////////
 
 void printInstructions(){
     printf("./bin/zbid_server [-h] [-j N] [-t M] PORT_NUMBER AUCTION_FILENAME.\n\n");
@@ -72,12 +89,6 @@ char* intToStr(int source){
     return to_return;
 }
 
-// shared resources
-int auction_ID = 1;
-List_t* user_list;
-List_t* auction_list;
-List_t* job_queue;		// job buffer
-
 auction_t* searchAuction(int search_ID){
     node_t* iter=auction_list->head;
     while(iter!=NULL){
@@ -88,16 +99,26 @@ auction_t* searchAuction(int search_ID){
     return NULL;
 }
 
-int num_job_thread = 2;	// default number of job threads
-int tick_second = 0 ;	// default tick in seconds (when 0 -> tick for each stdin input)
-int server_port = -1;
-char* auction_file_name = NULL;          
+int myStrlen(char* to_count){
+    int to_return=0;
+    char* count_iter=to_count;
+    while(*count_iter!='\0'){
+        count_iter++;
+        to_return++;
+    }
+    return to_return;
+}
 
-int listen_fd; //server listening file directory
-char buffer[BUFFER_SIZE]; //to receive message from client
-
-user_t* server_fake;
-
+int myAtoi(char* source){
+    int to_return=0;
+    char* atoi_iter=source;
+    while(*atoi_iter!='\0'&&*atoi_iter!='\n'){
+        to_return*=10;
+        to_return+=*atoi_iter-'0';
+        atoi_iter++;
+    }
+    return to_return;
+}
 /////////////////////////////////////INITIATE SOCKET IN SERVER//////////////////////////////////////////
     int server_init(int server_port){
         int sockfd;
