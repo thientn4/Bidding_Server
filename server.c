@@ -338,8 +338,8 @@ void* job_thread(){
                         //respond to client with ANWATCH and name of item
             //if job is to leave or stop watching an auctions-------------------------------------------------------------->FOR ABNER TO CHOOSE
             if(cur_job->job_protocol->msg_type==0x25){
-                    int ID_to_leave=atoi(cur_job->job_body);
-                    auction_t* auc_to_leave=searchAuction(ID_to_leave);
+                int ID_to_leave=atoi(cur_job->job_body);
+                auction_t* auc_to_leave=searchAuction(ID_to_leave);
                 //if provided auction_id does not exist
                 if(auc_to_leave==NULL){
                     //respond to client with EANOTFOUND
@@ -356,6 +356,7 @@ void* job_thread(){
                             user_t* cur_user=(user_t*)(cur_leave_iter->value);
                             if(strcmp(cur_job->requestor->username,cur_user->username)==0){
                                 removeByIndex(auc_to_leave->watching_users,index_to_leave);
+                              	break;
                             }
                             cur_leave_iter=cur_leave_iter->next;
                             index_to_leave++;
