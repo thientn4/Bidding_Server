@@ -77,7 +77,7 @@ char* myStrcpy(char* source){
         source++;
         size++;
     }
-    *(to_return+size)='\0';
+    *(to_return+size-1)='\0';
     return to_return;
 }
 
