@@ -328,6 +328,7 @@ void* job_thread(){
                       	wr_msg(cur_job->requestor->file_descriptor, return_msg, NULL);
                     }
                   	else {
+			insertFront(auc->watching_users,cur_job->requestor);
                       	return_msg->msg_type = 0x24;
                       	return_msg->msg_len = strlen(auc->item_name) + 1;
                       	wr_msg(cur_job->requestor->file_descriptor, return_msg, auc->item_name);
