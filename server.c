@@ -239,7 +239,7 @@ void* client_thread(void* user_ptr){
         job->job_protocol=malloc(sizeof(petr_header));
         int err = rd_msgheader(user->file_descriptor, job->job_protocol);
       	if (err == 0) {
-            if (job->job_protocol->msg_type == 0x11){ 
+            if (job->job_protocol->msg_type == 0x11||job->job_protocol->msg_type == 0){ 
                 printf("%s have logged out\n",user->username);
                         petr_header* to_send=malloc(sizeof(petr_header));
                         to_send->msg_len=0;
@@ -250,8 +250,9 @@ void* client_thread(void* user_ptr){
             }
             else {
                 printf("we received a job from client\n");
-                if(job->job_protocol->msg_type==0x20||job->job_protocol->msg_type==0x24||job->job_protocol->msg_type==0x26)
+                if(job->job_protocol->msg_type==0x20||job->job_protocol->msg_type==0x24||job->job_protocol->msg_type==0x26){
                     read(user->file_descriptor, client_buffer, BUFFER_SIZE); /////-------------------->to read message body
+                }
                 job->job_body = (char*)client_buffer;
                     printf("+---------------new_job_info----------------\n");
                     printf("|       job type: %d\n",job->job_protocol->msg_type);
