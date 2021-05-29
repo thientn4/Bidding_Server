@@ -102,7 +102,7 @@ char* intToStr(int source){
         *(to_return+size-2-iter_flip)=holder;
         iter_flip++;
     }
-    *(to_return+size)='\0';
+    *(to_return+size-1)='\0';
     return to_return;
 }
 
@@ -321,6 +321,7 @@ void* job_thread(){
                         new_auction->creator=cur_job->requestor;
                         new_auction->cur_bid_amount=0;
                         new_auction->ID=auction_ID;
+                        new_auction->cur_highest_bidder=NULL;
                   	    auction_ID++;
                     //testing
                         printf("+--------------new_bid_info-----------------+\n");
@@ -332,7 +333,8 @@ void* job_thread(){
                         printf("|       creator: %s\n",new_auction->creator->username);
                         printf("+-------------------------------------------+\n");
                     //add new auction
-                        insertFront(auction_list,(void*)new_auction);
+                        insertRear(auction_list,(void*)new_auction);
+                        insertRear(cur_job->requestor->listing_auctions,(void*)new_auction);
                     //respond to client with ANCREATE and new auction's ID
                         char* ID_to_send=intToStr(new_auction->ID);    /////////////remember to convert ID from int to string
                         to_send->msg_len=myStrlen(ID_to_send);
@@ -347,8 +349,17 @@ void* job_thread(){
                     //auctions must be ordered by lexicographically ascending (sort by auction_id)
             if(cur_job->job_protocol->msg_type == 0x23){
                 node_t* auc_list_iter=auction_list->head;
+                if(auction_list->length==0){
+                    to_send->msg_len=0;
+                    to_send->msg_type=0x23;
+                    wr_msg(cur_job->requestor->file_descriptor,to_send,NULL);
+                }
+                char* auc_list_message=malloc(1);
+                *auc_list_message='\0';
+                int auc_list_size=2;
                 while(auc_list_iter!=NULL){
                     auction_t* cur_auc=(auction_t*)(auc_list_iter->value);
+                    char* cur_ID=intToStr(cur_auc->ID);
                     char* cur_item_name=cur_auc->item_name;
                     char* cur_highest_bid=intToStr(cur_auc->cur_bid_amount);
                     char* cur_watcher_count=intToStr(cur_auc->watching_users->length);
@@ -358,9 +369,31 @@ void* job_thread(){
                             if(cur_auc->duration%tick_second!=0)duration_in_tick+=1;
                         }
                     char* cur_cycles_remain=intToStr(duration_in_tick);
-                    printf("%s; %s; %s; %s\n",cur_item_name,cur_highest_bid,cur_watcher_count,cur_cycles_remain);
+
+                    auc_list_size+=(myStrlen(cur_ID)+myStrlen(cur_item_name)+myStrlen(cur_highest_bid)+myStrlen(cur_watcher_count)+myStrlen(cur_cycles_remain)+9);
+                    auc_list_message=realloc(auc_list_message,auc_list_size);
+                    strcat(auc_list_message,cur_ID);
+                    strcat(auc_list_message,"; ");
+                    strcat(auc_list_message,cur_item_name);
+                    strcat(auc_list_message,"; ");
+                    strcat(auc_list_message,cur_highest_bid);
+                    strcat(auc_list_message,"; ");
+                    strcat(auc_list_message,cur_watcher_count);
+                    strcat(auc_list_message,"; ");
+                    strcat(auc_list_message,cur_cycles_remain);
+                    strcat(auc_list_message,"\n");
+                    
                     auc_list_iter=auc_list_iter->next;
                 }
+                strcat(auc_list_message,"\0");
+
+                printf("    %d == %d\n",myStrlen(auc_list_message)+1,auc_list_size);
+                printf("    %s",auc_list_message);
+
+                to_send->msg_len=myStrlen(auc_list_message)+1;
+                to_send->msg_type=0x23;
+                wr_msg(cur_job->requestor->file_descriptor,to_send,auc_list_message);
+                free(auc_list_message);
             }
             //if job is to watch an auction
             if (cur_job->job_protocol->msg_type == 0x24) {
@@ -389,7 +422,7 @@ void* job_thread(){
                             insertFront(auc->watching_users,cur_job->requestor);
                         //respond to client with ANWATCH and name of item
                             return_msg->msg_type = 0x24;
-                            return_msg->msg_len = strlen(auc->item_name)+1;
+                            return_msg->msg_len = strlen(auc->item_name);
                             wr_msg(cur_job->requestor->file_descriptor, return_msg, auc->item_name);
                     }
                 }
@@ -471,6 +504,7 @@ void* job_thread(){
                         else{
                             //update current highest bid and bidder of item
                                 auc_to_bid->cur_bid_amount=bid_amount;
+                                auc_to_bid->cur_highest_bidder=cur_job->requestor;
                             //respond to client with OK
                                 to_send->msg_len=0;
                                 to_send->msg_type=0x00;
@@ -584,9 +618,90 @@ void* job_thread(){
                 //the message body will be in format:
                     //auction_id;item_name;winning_user;winning_bid\n --> repeated
                     //responded list must be lexicographically ascending by auction_id
+            if (cur_job->job_protocol->msg_type == 0x34){
+              	if (cur_job->requestor->listing_auctions->length == 0) {
+                  	petr_header* return_msg = (petr_header*)malloc(sizeof(petr_header));
+                    return_msg->msg_len = 0;
+                    return_msg->msg_type = 0x34;
+                    wr_msg(cur_job->requestor->file_descriptor, return_msg, NULL);
+                    free(return_msg);
+                }
+              	else {
+                  	petr_header* return_msg = (petr_header*)malloc(sizeof(petr_header));
+                    return_msg->msg_type = 0x34;
+                  
+                  	char* msg = (char*)malloc(sizeof(char));
+                  	*msg = '\0';
+                  
+                  	char* username = "None";
+                  
+                    node_t* head = cur_job->requestor->listing_auctions->head;
+                    node_t* current = head;
+                    while (current != NULL) {
+                        auction_t* auction = (auction_t*)current->value;
+                      	if (auction->duration == 0) {
+                            int ID_length = 1, temp_ID = auction->ID;
+                            while (temp_ID > 0) {
+                                ID_length += 1;
+                                temp_ID /= 10;
+                            }
+                            int bid_amount_length = 1, temp_bid_amount = auction->cur_bid_amount;
+                            while (temp_bid_amount > 0) {
+                                bid_amount_length += 1;
+                                temp_bid_amount /= 10;
+                            }
+                          
+                          	if (auction->cur_highest_bidder != NULL) {
+                              	int len = myStrlen(auction->cur_highest_bidder->username);
+                              	username = (char*)realloc(username, sizeof(char) * (len + 1));
+                              	username=myStrcpy(auction->cur_highest_bidder->username);
+                            }
+
+                            msg = (char*)realloc(msg, sizeof(char) * (myStrlen(msg) + ID_length + 2 + myStrlen(auction->item_name) + 2 + myStrlen(username) + 2 + bid_amount_length + 2));                        
+
+                            char* str = intToStr(auction->ID);
+                            strcat(msg, str);
+                            strcat(msg, "; ");
+                            free(str);
+                            
+
+                            strcat(msg, auction->item_name);
+                            strcat(msg, "; ");
+                          
+                          	strcat(msg, username);
+                          	strcat(msg, "; ");
+
+                            str = intToStr(auction->cur_bid_amount);
+                            strcat(msg, str);
+                            strcat(msg, "\n");
+
+                            free(str);
+                        }
+                        current = current->next;
+                    }
+                  	msg = (char*)realloc(msg, sizeof(char) * (myStrlen(msg) + 1));
+                  	strcat(msg, "\0");
+                  
+                  	return_msg->msg_len = myStrlen(msg) + 1;
+                  	wr_msg(cur_job->requestor->file_descriptor, return_msg, msg);
+                  	free(return_msg);
+                  	free(msg);
+                }
+            }
             //if job is to show the balance of the sender
                 //respond to client with message body:
                     //balance = total sold - total bought
+            if (cur_job->job_protocol->msg_type == 0x35) {
+              	user_t* user = cur_job->requestor;
+              	char* bal = intToStr(user->balance);
+              	
+              	petr_header* return_msg = (petr_header*)malloc(sizeof(petr_header));
+                return_msg->msg_len = myStrlen(bal) + 1;
+                return_msg->msg_type = 0x35;
+                wr_msg(cur_job->requestor->file_descriptor, return_msg, bal);
+                free(return_msg);
+              	free(bal);
+            }
         }
     }
 }
@@ -681,6 +796,7 @@ int main(int argc, char* argv[]) {
                   	auc->creator = server_fake;
                   	auc->cur_bid_amount = 0;
                   	auc->watching_users = (List_t*)malloc(sizeof(List_t));
+                    auc->cur_highest_bidder=NULL;
                   
               		insertRear(auction_list, (void*)auc);
                 }
@@ -690,7 +806,7 @@ int main(int argc, char* argv[]) {
           	auc = NULL; 	// avoiding future error 
         }
 
-        /*---------------------------------------------------------------TESTING
+        /*---------------------------------------------------------------TESTING*/
         node_t* curNode=auction_list->head;
         while(curNode!=NULL){
             auction_t* curAuc=(auction_t*)(curNode->value);
@@ -701,7 +817,7 @@ int main(int argc, char* argv[]) {
             printf("    cur_bid_amount: %d\n",curAuc->cur_bid_amount);
             curNode=curNode->next;
         }
-        */
+        
         
 
     /////////////////////////////////////////RUN SERVER////////////////////////////////////////////////
