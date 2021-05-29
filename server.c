@@ -369,6 +369,8 @@ void* job_thread(){
                             if(cur_auc->duration%tick_second!=0)duration_in_tick+=1;
                         }
                     char* cur_cycles_remain=intToStr(duration_in_tick);
+                    printf("%d; %s; %d; %d; %d\n",cur_auc->ID,cur_auc->item_name,cur_auc->cur_bid_amount,cur_auc->watching_users->length,cur_auc->duration);
+                    printf("%s; %s; %s; %s; %s\n",cur_ID,cur_item_name,cur_highest_bid,cur_watcher_count,cur_cycles_remain);
 
                     auc_list_size+=(myStrlen(cur_ID)+myStrlen(cur_item_name)+myStrlen(cur_highest_bid)+myStrlen(cur_watcher_count)+myStrlen(cur_cycles_remain)+9);
                     auc_list_message=realloc(auc_list_message,auc_list_size);
@@ -388,7 +390,7 @@ void* job_thread(){
                 strcat(auc_list_message,"\0");
 
                 printf("    %d == %d\n",myStrlen(auc_list_message)+1,auc_list_size);
-                printf("    %s",auc_list_message);
+                printf("%s",auc_list_message);
 
                 to_send->msg_len=myStrlen(auc_list_message)+1;
                 to_send->msg_type=0x23;
@@ -706,7 +708,18 @@ void* job_thread(){
     }
 }
 
-
+void printTest(){
+    node_t* curNode=auction_list->head;
+    while(curNode!=NULL){
+        auction_t* curAuc=(auction_t*)(curNode->value);
+        printf("iter_name: %s\n",curAuc->item_name);
+        printf("    ID: %d\n",curAuc->ID);
+        printf("    duration: %d\n",curAuc->duration);
+        printf("    max_bid_amount: %d\n",curAuc->max_bid_amount);
+        printf("    cur_bid_amount: %d\n",curAuc->cur_bid_amount);
+        curNode=curNode->next;
+    }
+}
 
 int main(int argc, char* argv[]) {
     ///////////////////////////////////PARSING INPUT COMMAND///////////////////////////////////////////
@@ -771,7 +784,7 @@ int main(int argc, char* argv[]) {
           	
           	int i = 1;
           	char* cur = (char*)malloc(sizeof(char));				// current row in file
-          	auction_t* auc = (auction_t*)malloc(sizeof(auction_t));	// auction information
+          	auction_t* auc = malloc(sizeof(auction_t));	// auction information
           	while (fgets(cur, 100, fp) != NULL) {
             	if ((i % 4) == 0) {
                 	auc = (auction_t*)malloc(sizeof(auction_t));
@@ -779,7 +792,7 @@ int main(int argc, char* argv[]) {
                 }
               	else if (i == 1) {
                   	char* temp_cur = (char*)malloc(sizeof(char) * (myStrlen(cur) + 1));
-                    strcpy(temp_cur, cur);
+                    temp_cur=myStrcpy(cur);
                     auc->item_name = temp_cur;
                     *(temp_cur+myStrlen(temp_cur)-1)='\0';
                   
@@ -802,23 +815,8 @@ int main(int argc, char* argv[]) {
                 }
               	i++;
           	}
-          	free(auc);		// freeing last, unused auc
           	auc = NULL; 	// avoiding future error 
         }
-
-        /*---------------------------------------------------------------TESTING*/
-        node_t* curNode=auction_list->head;
-        while(curNode!=NULL){
-            auction_t* curAuc=(auction_t*)(curNode->value);
-            printf("iter_name: %s\n",curAuc->item_name);
-            printf("    ID: %d\n",curAuc->ID);
-            printf("    duration: %d\n",curAuc->duration);
-            printf("    max_bid_amount: %d\n",curAuc->max_bid_amount);
-            printf("    cur_bid_amount: %d\n",curAuc->cur_bid_amount);
-            curNode=curNode->next;
-        }
-        
-        
 
     /////////////////////////////////////////RUN SERVER////////////////////////////////////////////////
         //spawn tick thread and N job threads
@@ -844,6 +842,10 @@ int main(int argc, char* argv[]) {
             printf("Wait for new client connection\n");
             int* client_fd = malloc(sizeof(int));
             *client_fd = accept(listen_fd, (SA*)&client_addr, &client_addr_len);
+
+
+            printTest();
+
             if (*client_fd < 0) {
                 printf("server acccept failed\n");
                 exit(EXIT_FAILURE);
