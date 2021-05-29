@@ -400,7 +400,7 @@ void* job_thread(){
             }
             //if job is to watch an auction
             if (cur_job->job_protocol->msg_type == 0x24) {
-                    petr_header* return_msg = (petr_header*)malloc(sizeof(petr_header));
+                    petr_header* return_msg = malloc(sizeof(petr_header));
                     return_msg->msg_len = 0;
                                 
                     int ID = myAtoi(cur_job->job_body);
@@ -425,7 +425,8 @@ void* job_thread(){
                             insertRear(auc->watching_users,(void*)(cur_job->requestor));
                         //respond to client with ANWATCH and name of item
                             return_msg->msg_type = 0x24;
-                            return_msg->msg_len = strlen(auc->item_name);
+                            return_msg->msg_len = myStrlen(auc->item_name)+1;
+                            printf("watch respond with <%s> in length %d\n", auc->item_name,return_msg->msg_len);
                             wr_msg(cur_job->requestor->file_descriptor, return_msg, auc->item_name);
                     }
                 }
@@ -504,7 +505,7 @@ void* job_thread(){
                     }
                     else{
                         //if user's bid is lower than current bid
-                        if(auc_to_bid->cur_bid_amount>bid_amount){
+                        if(auc_to_bid->cur_bid_amount>=bid_amount){
                             //respond to client with EBIDLOW
                                 printf("bid is too low\n");
                                 to_send->msg_len=0;
