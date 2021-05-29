@@ -10,6 +10,7 @@ typedef struct user {
 
 typedef struct auction {
     user_t* creator;
+    user_t* cur_highest_bidder;
     char* item_name;
     List_t* watching_users;
     int cur_bid_amount;
