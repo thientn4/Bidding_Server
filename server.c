@@ -5,6 +5,7 @@
 
 
             not thread safe note: atoi, strlen
+            remember to do auction sorting based on ID
 
 
 
@@ -421,7 +422,7 @@ void* job_thread(){
                     //else
                   	else {
                         //add requester to auction's watcher_list
-                            insertFront(auc->watching_users,cur_job->requestor);
+                            insertRear(auc->watching_users,(void*)(cur_job->requestor));
                         //respond to client with ANWATCH and name of item
                             return_msg->msg_type = 0x24;
                             return_msg->msg_len = strlen(auc->item_name);
@@ -472,6 +473,7 @@ void* job_thread(){
                 auction_t* auc_to_bid=searchAuction(id_to_bid);
                 if(auc_to_bid==NULL){
                     //respond to client with EANOTFOUND
+                        printf("we cannot find this bid\n");
                         to_send->msg_len=0;
                         to_send->msg_type=0x2C;
                         wr_msg(cur_job->requestor->file_descriptor,to_send,NULL);
@@ -480,16 +482,22 @@ void* job_thread(){
                 else{
                         int is_watching=0;
                         node_t* watcher_iter=auc_to_bid->watching_users->head;
+                        printf("------------wacher of this item----------\n");
                         while(watcher_iter!=NULL){
-                            user_t* cur_watcher=(user_t*)watcher_iter;
+                            user_t* cur_watcher=(user_t*)(watcher_iter->value);
+                            printf("%s\n",cur_watcher->username);
                             if(strcmp(cur_watcher->username,cur_job->requestor->username)==0){
+                                printf("-->this user is watching this item\n");
                                 is_watching=1;
                             }
                             watcher_iter=watcher_iter->next;
                         }
+                        printf("-----------------------------------------\n");
                     //if user is not watching this item or is both requester and creator of this item
                     if(is_watching==0||strcmp(cur_job->requestor->username,auc_to_bid->creator->username)==0){
                         //respond to clietn with EANDENIED
+                            if(is_watching==0)printf("this user is not watching this item\n");
+                            if(strcmp(cur_job->requestor->username,auc_to_bid->creator->username)==0)printf("this bidder is the bid maker\n");
                             to_send->msg_len=0;
                             to_send->msg_type=0x2D;
                             wr_msg(cur_job->requestor->file_descriptor,to_send,NULL);
@@ -498,6 +506,7 @@ void* job_thread(){
                         //if user's bid is lower than current bid
                         if(auc_to_bid->cur_bid_amount>bid_amount){
                             //respond to client with EBIDLOW
+                                printf("bid is too low\n");
                                 to_send->msg_len=0;
                                 to_send->msg_type=0x2E;
                                 wr_msg(cur_job->requestor->file_descriptor,to_send,NULL);
@@ -808,7 +817,7 @@ int main(int argc, char* argv[]) {
                   	auc->max_bid_amount = myAtoi(cur);
                   	auc->creator = server_fake;
                   	auc->cur_bid_amount = 0;
-                  	auc->watching_users = (List_t*)malloc(sizeof(List_t));
+                  	auc->watching_users = malloc(sizeof(List_t));
                     auc->cur_highest_bidder=NULL;
                   
               		insertRear(auction_list, (void*)auc);
