@@ -231,15 +231,15 @@ short-lived client threads - producer after successful login
 */
 void* client_thread(void* user_ptr){
     user_t* user = (user_t*)user_ptr;
-    char client_buffer[BUFFER_SIZE];   /////-------------------->to read message body
 
+    char client_buffer[BUFFER_SIZE];   /////-------------------->to read message body
     while(1) {
       	job_t* job = (job_t*)malloc(sizeof(job_t));
   		job->requestor = user;
         job->job_protocol=malloc(sizeof(petr_header));
         int err = rd_msgheader(user->file_descriptor, job->job_protocol);
       	if (err == 0) {
-            if (job->job_protocol->msg_type == 0x11||job->job_protocol->msg_type == 0){ 
+            if (job->job_protocol->msg_type == 0x11){ 
                 printf("%s have logged out\n",user->username);
                         petr_header* to_send=malloc(sizeof(petr_header));
                         to_send->msg_len=0;
@@ -250,14 +250,19 @@ void* client_thread(void* user_ptr){
             }
             else {
                 printf("we received a job from client\n");
-                if(job->job_protocol->msg_type==0x20||job->job_protocol->msg_type==0x24||job->job_protocol->msg_type==0x26){
-                    read(user->file_descriptor, client_buffer, BUFFER_SIZE); /////-------------------->to read message body
+                job->job_body = NULL;
+                if(job->job_protocol->msg_type==0x20||job->job_protocol->msg_type==0x24||job->job_protocol->msg_type==0x25||job->job_protocol->msg_type==0x26){
+                    read(user->file_descriptor, buffer, BUFFER_SIZE); /////-------------------->to read message body
+                    job->job_body = buffer;
                 }
-                job->job_body = (char*)client_buffer;
                     printf("+---------------new_job_info----------------\n");
                     printf("|       job type: %d\n",job->job_protocol->msg_type);
                     printf("|       job body length: %d\n",job->job_protocol->msg_len);
                     printf("|       requestor name: %s\n",job->requestor->username);
+                    printf("+---------------client_buffer---------------\n");
+                    printf("%s\n",buffer);
+                    printf("+---------------new_job_body----------------\n");
+                    if(job->job_body!=NULL)printf("%s\n",job->job_body);
                     printf("+-------------------------------------------\n");
                 insertRear(job_queue, job);
             } // end else
@@ -320,6 +325,7 @@ void* job_thread(){
                         new_auction->max_bid_amount=new_item_max;
                     //set other info
                         new_auction->watching_users=malloc(sizeof(List_t));
+                        new_auction->watching_users->length=0;
                         new_auction->creator=cur_job->requestor;
                         new_auction->cur_bid_amount=0;
                         new_auction->ID=auction_ID;
@@ -428,10 +434,17 @@ void* job_thread(){
                         //add requester to auction's watcher_list
                             insertRear(auc->watching_users,(void*)(cur_job->requestor));
                         //respond to client with ANWATCH and name of item
-                            return_msg->msg_type = 0x24;
-                            return_msg->msg_len = myStrlen(auc->item_name)+1;
                             printf("watch respond with <%s> in length %d\n", auc->item_name,return_msg->msg_len);
-                            wr_msg(cur_job->requestor->file_descriptor, return_msg, auc->item_name);
+                            char* watch_message=malloc(1);
+                            *watch_message='\0';
+                            strcat(watch_message,auc->item_name);
+                            strcat(watch_message,"\r\n");
+                            strcat(watch_message,intToStr(auc->max_bid_amount));
+                            return_msg->msg_type = 0x24;
+                            return_msg->msg_len = myStrlen(watch_message)+1;
+                            printf("%s\n",watch_message);
+                            wr_msg(cur_job->requestor->file_descriptor, return_msg, watch_message);
+                            free(watch_message);
                     }
                 }
                 free(return_msg);
@@ -527,6 +540,23 @@ void* job_thread(){
                                 wr_msg(cur_job->requestor->file_descriptor,to_send,NULL);
                             //send ANUPDATE to all other watchers of the item in form of <auc_id>\r\n<item_name>\r\n<new_bidder_name>\r\n<new bid amount>
                                 ////////////////////////REMEMBER TO DO THIS////////////////////////////////
+                                char* bid_message=malloc(1);
+                                *bid_message='\0';
+                                strcat(bid_message,intToStr(auc_to_bid->ID));
+                                strcat(bid_message,"\r\n");
+                                strcat(bid_message,auc_to_bid->item_name);
+                                strcat(bid_message,"\r\n");
+                                strcat(bid_message,auc_to_bid->cur_highest_bidder->username);
+                                strcat(bid_message,"\r\n");
+                                strcat(bid_message,intToStr(auc_to_bid->cur_bid_amount));
+                                to_send->msg_len=myStrlen(bid_message)+1;
+                                to_send->msg_type=0x27;
+                                node_t* other_bid_iter=auc_to_bid->watching_users->head;
+                                while(other_bid_iter!=NULL){
+                                    user_t* cur_bidder=(user_t*)(other_bid_iter->value);
+                                    wr_msg(cur_bidder->file_descriptor,to_send,bid_message);
+                                    other_bid_iter=other_bid_iter->next;
+                                }
                         }
                     }
                 }
@@ -932,13 +962,17 @@ int main(int argc, char* argv[]) {
                         new_user->balance=0;
                         new_user->is_online=1;
                         insertRear(user_list,new_user);
+                        printf("+-----------new_user_info---------------\n");
+                        printf("|   username: %s\n",new_user->username);
+                        printf("|   password: %s\n",new_user->password);
+                        printf("|   file_descriptor: %d\n",new_user->file_descriptor);
+                        printf("+---------------------------------------\n");
                     //send message with type=0x00 and name=OK
                         to_send->msg_len=0;
                         to_send->msg_type=0x00;
                         wr_msg(*client_fd,to_send,NULL);
                     //create client thread with client_fd as argument to continue communication
                         pthread_t clientID;
-                        printf("file descriptor in main: %d\n",new_user->file_descriptor);
                         pthread_create(&clientID, NULL, client_thread, (void*)new_user); 
                         printf("new account logged in\n");
                 }
