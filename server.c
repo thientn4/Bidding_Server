@@ -339,7 +339,7 @@ void* job_thread(){
                         insertRear(cur_job->requestor->listing_auctions,(void*)new_auction);
                     //respond to client with ANCREATE and new auction's ID
                         char* ID_to_send=intToStr(new_auction->ID);    /////////////remember to convert ID from int to string
-                        to_send->msg_len=myStrlen(ID_to_send);
+                        to_send->msg_len=myStrlen(ID_to_send)+1;
                         to_send->msg_type=0x20;
                         wr_msg(cur_job->requestor->file_descriptor,to_send,ID_to_send);
                         free(ID_to_send);
@@ -363,27 +363,30 @@ void* job_thread(){
                     auction_t* cur_auc=(auction_t*)(auc_list_iter->value);
                     char* cur_ID=intToStr(cur_auc->ID);
                     char* cur_item_name=cur_auc->item_name;
-                    char* cur_highest_bid=intToStr(cur_auc->cur_bid_amount);
+                    char* cur_max_price=intToStr(cur_auc->max_bid_amount);
                     char* cur_watcher_count=intToStr(cur_auc->watching_users->length);
                         int duration_in_tick=cur_auc->duration;
                         if(tick_second!=0){
                             duration_in_tick/=tick_second;
                             if(cur_auc->duration%tick_second!=0)duration_in_tick+=1;
                         }
+                    char* cur_highest_bid=intToStr(cur_auc->cur_bid_amount);
                     char* cur_cycles_remain=intToStr(duration_in_tick);
                     printf("%d; %s; %d; %d; %d\n",cur_auc->ID,cur_auc->item_name,cur_auc->cur_bid_amount,cur_auc->watching_users->length,cur_auc->duration);
                     printf("%s; %s; %s; %s; %s\n",cur_ID,cur_item_name,cur_highest_bid,cur_watcher_count,cur_cycles_remain);
 
-                    auc_list_size+=(myStrlen(cur_ID)+myStrlen(cur_item_name)+myStrlen(cur_highest_bid)+myStrlen(cur_watcher_count)+myStrlen(cur_cycles_remain)+9);
+                    auc_list_size+=(myStrlen(cur_ID)+myStrlen(cur_item_name)+myStrlen(cur_max_price)+myStrlen(cur_highest_bid)+myStrlen(cur_watcher_count)+myStrlen(cur_cycles_remain)+6);
                     auc_list_message=realloc(auc_list_message,auc_list_size);
                     strcat(auc_list_message,cur_ID);
-                    strcat(auc_list_message,"; ");
+                    strcat(auc_list_message,";");
                     strcat(auc_list_message,cur_item_name);
-                    strcat(auc_list_message,"; ");
-                    strcat(auc_list_message,cur_highest_bid);
-                    strcat(auc_list_message,"; ");
+                    strcat(auc_list_message,";");
+                    strcat(auc_list_message,cur_max_price);
+                    strcat(auc_list_message,";");
                     strcat(auc_list_message,cur_watcher_count);
-                    strcat(auc_list_message,"; ");
+                    strcat(auc_list_message,";");
+                    strcat(auc_list_message,cur_highest_bid);
+                    strcat(auc_list_message,";");
                     strcat(auc_list_message,cur_cycles_remain);
                     strcat(auc_list_message,"\n");
                     
