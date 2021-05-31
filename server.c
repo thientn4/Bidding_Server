@@ -383,8 +383,8 @@ void* job_thread(){
                         printf("|       creator: %s\n",new_auction->creator->username);
                         printf("+-------------------------------------------+\n");
                     //add new auction
-                        insertRear(auction_list,(void*)new_auction);
-                        insertRear(cur_job->requestor->listing_auctions,(void*)new_auction);
+                        insertInOrder(auction_list,(void*)new_auction);
+                        insertInOrder(cur_job->requestor->listing_auctions,(void*)new_auction);
                     //respond to client with ANCREATE and new auction's ID
                         char* ID_to_send=intToStr(new_auction->ID);    /////////////remember to convert ID from int to string
                         to_send->msg_len=myStrlen(ID_to_send)+1;
@@ -864,6 +864,9 @@ int main(int argc, char* argv[]) {
 			server_fake->file_descriptor=-1;/////////not sure if I should set this to -1
 			server_fake->is_online=1;
         auction_list = (List_t*)malloc(sizeof(List_t));
+  		auction_list->length = 0;
+  		auction_list->head = NULL;
+  		auction_list->comparator = List_tComparator;
   		// if auction_file_name == NULL, ignore
   		if (auction_file_name != NULL) {
           	// opens file, prefills auctions list
@@ -899,9 +902,9 @@ int main(int argc, char* argv[]) {
                   	auc->creator = server_fake;
                   	auc->cur_bid_amount = 0;
                   	auc->watching_users = malloc(sizeof(List_t));
-                    auc->cur_highest_bidder=NULL;
+                    auc->cur_highest_bidder = NULL;
                   
-              		insertRear(auction_list, (void*)auc);
+              		insertInOrder(auction_list, (void*)auc);
                 }
               	i++;
           	}
