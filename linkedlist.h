@@ -11,6 +11,7 @@ typedef struct node {
 typedef struct list {
     node_t* head;
     int length;
+    int (*comparator)(void*, void*);
 } List_t;
 
 void insertFront(List_t* list, void* valref) {
