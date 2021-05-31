@@ -46,6 +46,47 @@ void insertRear(List_t* list, void* valref) {
     list->length++;
 }
 
+void insertInOrder(List_t* list, void* valref) {
+    if (list->length == 0) {
+        insertFront(list, valref);
+        return;
+    }
+
+    node_t** head = &(list->head);
+    node_t* new_node;
+    new_node = malloc(sizeof(node_t));
+    new_node->value = valref;
+    new_node->next = NULL;
+
+    if (list->comparator(new_node->value, (*head)->value) <= 0) {
+        new_node->next = *head;
+        *head = new_node;
+    } 
+    else if ((*head)->next == NULL){ 
+        (*head)->next = new_node;
+    }                                
+    else {
+        node_t* prev = *head;
+        node_t* current = prev->next;
+        while (current != NULL) {
+            if (list->comparator(new_node->value, current->value) > 0) {
+                if (current->next != NULL) {
+                    prev = current;
+                    current = current->next;
+                } else {
+                    current->next = new_node;
+                    break;
+                }
+            } else {
+                prev->next = new_node;
+                new_node->next = current;
+                break;
+            }
+        }
+    }
+    list->length++;
+}
+
 void* removeFront(List_t* list) {
     node_t** head = &(list->head);
     void* retval = NULL;
@@ -133,4 +174,29 @@ void deleteList(List_t* list) {
         removeFront(list);
     }
     list->length = 0;
+}
+
+void sortList(List_t* list) {
+    List_t* new_list = malloc(sizeof(List_t));	
+    
+	new_list->length = 0;
+    new_list->comparator = list->comparator;
+    new_list->head = NULL;
+
+    int i = 0;
+    int len = list->length;
+    for (; i < len; ++i)
+    {
+        void* val = removeRear(list);
+        insertInOrder(new_list, val); 
+    }
+
+    node_t* temp = list->head;
+    list->head = new_list->head;
+
+    new_list->head = temp;
+    list->length = new_list->length;  
+
+    deleteList(new_list);
+    free(new_list);  
 }
