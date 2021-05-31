@@ -59,6 +59,36 @@ char buffer[BUFFER_SIZE]; //to receive message from client
 user_t* server_fake;
 
 ///////////////////////////////////////////////////HELPER FUNCTION///////////////////////////////////////////////////
+int List_tComparator(void* lhs, void* rhs) {
+	if (lhs == NULL || rhs == NULL) 
+        return 0;
+
+   auction_t* l = (auction_t*)lhs;
+   auction_t* r = (auction_t*)rhs;
+   return myStrcmp(intToStr(lhs->ID), intToStr(rhs->ID));
+}
+
+int myStrcmp(const char* str1, const char* str2) {
+  	while (*str1) {
+      	if (*str1 != *str2)
+            break;
+      	str1++;
+      	str2++;
+	}
+  	return *(const unsigned char*)str1 - *(const unsigned char*)str2;
+}
+
+void myStrcat(char* str1, const char* str2) {
+    char* temp = str1 + stringLen(str1);
+
+    while (*str2 != '\0') {
+        *temp = *str2;
+        temp++;
+        str2++;
+    }
+    *temp = '\0';
+}
+
 
 void printInstructions(){
     printf("./bin/zbid_server [-h] [-j N] [-t M] PORT_NUMBER AUCTION_FILENAME.\n\n");
