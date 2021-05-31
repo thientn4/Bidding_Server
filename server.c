@@ -246,11 +246,57 @@ void* tick_thread() {
     node_t* head = auction_list->head;
     node_t* current = head;
     while (current != NULL) { 
-      ((auction_t*)(current->value))->duration = ((auction_t*)(current->value))->duration - 1;
-      if (((auction_t*)(current->value))->duration == 0) {
-          printf("removing auction with itemname: %s\n",((auction_t*)(current->value))->item_name );
-          current = current->next;
-          removeByIndex(auction_list, i); // removing by index isn't enough: I need to free
+        auction_t* cur_auc=(auction_t*)(current->value);
+        cur_auc->duration -= 1;
+        if (cur_auc->duration == 0) {
+            printf("removing auction with itemname: %s\n",cur_auc->item_name );
+            current = current->next;
+            removeByIndex(auction_list, i); // removing by index isn't enough: I need to free
+            /////////////////////update winner and notify other watcher with 0x22 and message aucID\r\nwinner_name\r\nwin_price or aucID\r\n\r\n
+            petr_header* to_send=malloc(sizeof(petr_header));
+            char* message;
+            printf("check for winner\n");
+            user_t* highest=cur_auc->cur_highest_bidder;
+            if(highest==NULL){
+                printf("no winner for this ended auction\n");
+                char* ID_str=intToStr(cur_auc->ID);
+                message=malloc(myStrlen(ID_str)+5);
+                *message='\0';
+                strcat(message,ID_str);
+                strcat(message,"\r\n\r\n");
+                to_send->msg_type=0x22;
+                to_send->msg_len=myStrlen(message)+1;
+                free(ID_str);
+            }else{
+                    user_t* winner=cur_auc->cur_highest_bidder;
+                    cur_auc->cur_highest_bidder->balance-=cur_auc->cur_bid_amount;
+                    insertRear(winner->won_auctions,(void*)cur_auc);
+                    user_t* saler=cur_auc->creator;
+                    saler->balance=saler->balance+cur_auc->cur_bid_amount;
+                printf("there is a winner for this auction\n");
+                char* ID_str=intToStr(cur_auc->ID);
+                char* price_str=intToStr(cur_auc->cur_bid_amount);
+                message=malloc(myStrlen(ID_str)+myStrlen(price_str)+myStrlen(cur_auc->cur_highest_bidder->username)+5);
+                *message='\0';
+                strcat(message,ID_str);
+                strcat(message,"\r\n");
+                strcat(message,cur_auc->cur_highest_bidder->username);
+                strcat(message,"\r\n");
+                strcat(message,price_str);
+                to_send->msg_type=0x22;
+                to_send->msg_len=myStrlen(message)+1;
+                free(ID_str);
+                free(price_str);
+            }
+            printf("notify other watchers\n");
+            node_t* cur_watch_iter=cur_auc->watching_users->head;
+            while(cur_watch_iter!=NULL){
+                user_t* cur_watcher=(user_t*)(cur_watch_iter->value);
+                wr_msg(cur_watcher->file_descriptor,to_send,message);
+                cur_watch_iter=cur_watch_iter->next;
+            }
+            free(message);
+            free(to_send);
       }
       else {
           current = current->next;
