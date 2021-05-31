@@ -150,7 +150,7 @@ void printMsg(char* input){
 }
 
 int myStrcmp(const char* str1, const char* str2) {
-  	while (*str1) {
+  	while (*str1 && *str2) {
       	if (*str1 != *str2)
             break;
       	str1++;
