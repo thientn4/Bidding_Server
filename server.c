@@ -138,6 +138,17 @@ int myAtoi(char* source){
     return to_return;
 }
 
+void printMsg(char* input){
+    char* iter=input;
+    while(*iter!='\0'){
+        if(*iter=='\n')printf("\\n");
+        else if(*iter=='\r')printf("\\r");
+        else printf("%c",*iter);
+        iter++;
+    }
+    printf("\n");
+}
+
 /////////////////////////////////////INITIATE SOCKET IN SERVER//////////////////////////////////////////
     int server_init(int server_port){
         int sockfd;
@@ -252,15 +263,16 @@ void* client_thread(void* user_ptr){
                 printf("we received a job from client\n");
                 job->job_body = NULL;
                 if(job->job_protocol->msg_type==0x20||job->job_protocol->msg_type==0x24||job->job_protocol->msg_type==0x25||job->job_protocol->msg_type==0x26){
-                    read(user->file_descriptor, buffer, BUFFER_SIZE); /////-------------------->to read message body
-                    job->job_body = buffer;
+                    read(user->file_descriptor, client_buffer, BUFFER_SIZE); /////-------------------->to read message body
+                    job->job_body = client_buffer;
                 }
                     printf("+---------------new_job_info----------------\n");
                     printf("|       job type: %d\n",job->job_protocol->msg_type);
                     printf("|       job body length: %d\n",job->job_protocol->msg_len);
                     printf("|       requestor name: %s\n",job->requestor->username);
                     printf("+---------------client_buffer---------------\n");
-                    printf("%s\n",buffer);
+                    printMsg(client_buffer);
+                    printf("\n");
                     printf("+---------------new_job_body----------------\n");
                     if(job->job_body!=NULL)printf("%s\n",job->job_body);
                     printf("+-------------------------------------------\n");
@@ -434,17 +446,17 @@ void* job_thread(){
                         //add requester to auction's watcher_list
                             insertRear(auc->watching_users,(void*)(cur_job->requestor));
                         //respond to client with ANWATCH and name of item
-                            printf("watch respond with <%s> in length %d\n", auc->item_name,return_msg->msg_len);
-                            char* watch_message=malloc(1);
+                            char* max_bid_str=intToStr(auc->max_bid_amount);
+                            char* watch_message=malloc(myStrlen(auc->item_name)+2+myStrlen(max_bid_str));
                             *watch_message='\0';
                             strcat(watch_message,auc->item_name);
                             strcat(watch_message,"\r\n");
-                            strcat(watch_message,intToStr(auc->max_bid_amount));
+                            strcat(watch_message,max_bid_str);
                             return_msg->msg_type = 0x24;
                             return_msg->msg_len = myStrlen(watch_message)+1;
-                            printf("%s\n",watch_message);
                             wr_msg(cur_job->requestor->file_descriptor, return_msg, watch_message);
                             free(watch_message);
+                            free(max_bid_str);
                     }
                 }
                 free(return_msg);
@@ -539,16 +551,17 @@ void* job_thread(){
                                 to_send->msg_type=0x00;
                                 wr_msg(cur_job->requestor->file_descriptor,to_send,NULL);
                             //send ANUPDATE to all other watchers of the item in form of <auc_id>\r\n<item_name>\r\n<new_bidder_name>\r\n<new bid amount>
-                                ////////////////////////REMEMBER TO DO THIS////////////////////////////////
-                                char* bid_message=malloc(1);
+                                char* ID_str=intToStr(auc_to_bid->ID);
+                                char* cur_bid_str=intToStr(auc_to_bid->cur_bid_amount);
+                                char* bid_message=malloc(6+myStrlen(ID_str)+myStrlen(cur_bid_str)+myStrlen(auc_to_bid->item_name)+myStrlen(auc_to_bid->cur_highest_bidder->username));
                                 *bid_message='\0';
-                                strcat(bid_message,intToStr(auc_to_bid->ID));
+                                strcat(bid_message,ID_str);
                                 strcat(bid_message,"\r\n");
                                 strcat(bid_message,auc_to_bid->item_name);
                                 strcat(bid_message,"\r\n");
                                 strcat(bid_message,auc_to_bid->cur_highest_bidder->username);
                                 strcat(bid_message,"\r\n");
-                                strcat(bid_message,intToStr(auc_to_bid->cur_bid_amount));
+                                strcat(bid_message,cur_bid_str);
                                 to_send->msg_len=myStrlen(bid_message)+1;
                                 to_send->msg_type=0x27;
                                 node_t* other_bid_iter=auc_to_bid->watching_users->head;
@@ -557,6 +570,9 @@ void* job_thread(){
                                     wr_msg(cur_bidder->file_descriptor,to_send,bid_message);
                                     other_bid_iter=other_bid_iter->next;
                                 }
+                                free(cur_bid_str);
+                                free(ID_str);
+                                free(bid_message);
                         }
                     }
                 }
