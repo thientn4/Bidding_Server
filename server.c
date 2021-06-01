@@ -28,6 +28,7 @@
     #include <sys/types.h>
     #include <sys/wait.h>
     #include <unistd.h>
+    #include <semaphore.h>
 
     #define BUFFER_SIZE 1024
     #define SA struct sockaddr
@@ -416,6 +417,7 @@ void* job_thread(){
                         new_auction->max_bid_amount=new_item_max;
                     //set other info
                         new_auction->watching_users=malloc(sizeof(List_t));
+                        sem_init(&(new_auction->watching_users->mutex),0,1);
                         new_auction->watching_users->length=0;
                         new_auction->creator=cur_job->requestor;
                         new_auction->cur_bid_amount=0;
@@ -916,13 +918,16 @@ int main(int argc, char* argv[]) {
 			server_fake->username="fake";
 			server_fake->password="fake";
 			server_fake->won_auctions=malloc(sizeof(List_t));///////remember to free this
+            sem_init(&(server_fake->won_auctions->mutex),0,1);
             server_fake->won_auctions->comparator= List_tComparator;
 			server_fake->listing_auctions=malloc(sizeof(List_t));//////free this too
+            sem_init(&(server_fake->listing_auctions->mutex),0,1);
             server_fake->listing_auctions->comparator= List_tComparator;
 			server_fake->balance=0;
 			server_fake->file_descriptor=-1;/////////not sure if I should set this to -1
 			server_fake->is_online=1;
         auction_list = (List_t*)malloc(sizeof(List_t));
+        sem_init(&(auction_list->mutex),0,1);
         auction_list->comparator= List_tComparator;
   		// if auction_file_name == NULL, ignore
   		if (auction_file_name != NULL) {
@@ -959,6 +964,7 @@ int main(int argc, char* argv[]) {
                   	auc->creator = server_fake;
                   	auc->cur_bid_amount = 0;
                   	auc->watching_users = malloc(sizeof(List_t));
+                    sem_init(&(auc->watching_users->mutex),0,1);
                     auc->cur_highest_bidder=NULL;
                     if(is_debug==1)printf("cur_highest_bidder=NULL\n");
               		insertInOrder(auction_list, (void*)auc);
@@ -979,7 +985,9 @@ int main(int argc, char* argv[]) {
                 iter_job++;
             }
         user_list=(List_t*)malloc(sizeof(List_t));
+        sem_init(&(user_list->mutex),0,1);
         job_queue=(List_t*)malloc(sizeof(List_t));
+        sem_init(&(job_queue->mutex),0,1);
         listen_fd = server_init(server_port); // Initiate server and start listening on specified port
         int client_fd;
         struct sockaddr_in client_addr;
@@ -1063,8 +1071,10 @@ int main(int argc, char* argv[]) {
                         new_user->username=myStrcpy(username_check);
                         new_user->password=myStrcpy(password_check);
                         new_user->won_auctions=malloc(sizeof(List_t));
+                        sem_init(&(new_user->won_auctions->mutex),0,1);
                         new_user->won_auctions->comparator= List_tComparator;
                         new_user->listing_auctions=malloc(sizeof(List_t));
+                        sem_init(&(new_user->listing_auctions->mutex),0,1);
                         new_user->listing_auctions->comparator= List_tComparator;
                         new_user->file_descriptor=*client_fd;
                         new_user->balance=0;
