@@ -339,7 +339,7 @@ void* client_thread(void* user_ptr){
         job->job_protocol=malloc(sizeof(petr_header));
         int err = rd_msgheader(user->file_descriptor, job->job_protocol);
       	if (err == 0) {
-            if (job->job_protocol->msg_type == 0x11){ 
+            if (job->job_protocol->msg_type == 0x11 || job->job_protocol->msg_type == 0x00){ 
                 if(is_debug==1)printf("%s have logged out\n",user->username);
                         petr_header* to_send=malloc(sizeof(petr_header));
                         to_send->msg_len=0;
