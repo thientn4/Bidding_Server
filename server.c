@@ -111,12 +111,17 @@ char* intToStr(int source){
 }
 
 auction_t* searchAuction(int search_ID){
+  	sem_wait(&(auction_list->mutex));
     node_t* iter=auction_list->head;
     while(iter!=NULL){
-        auction_t* cur_auc=(auction_t*)(iter->value);
-        if(cur_auc->ID==search_ID)return cur_auc;
-        iter=iter->next;
+        auction_t* cur_auc=(auction_t*)(iter->value);////////////should this be blocked too?
+        if(cur_auc->ID==search_ID){
+          	sem_post(&(auction_list->mutex));
+          	return cur_auc;
+        }
+        iter = iter->next;
     }
+    sem_post(&(auction_list->mutex));
     return NULL;
 }
 
@@ -244,12 +249,15 @@ void* tick_thread() {
     	sleep(1);
 
     if(is_debug==1)printf("%d ticked!\n",count_tick);
-  
+
     int i = 0;
     node_t* head = auction_list->head;
     node_t* current = head;
     while (current != NULL) { 
-        auction_t* cur_auc=(auction_t*)(current->value);
+      	//sem_wait(&(auction_list->mutex));--------------------------------> should not be here since we need to remove by index
+      
+      	auction_t* cur_auc = (auction_t*)(current->value);
+        sem_wait(&(cur_auc->mutex));
         cur_auc->duration -= 1;
         if (cur_auc->duration == 0) {
             if(is_debug==1)printf("removing auction with itemname: %s\n",cur_auc->item_name );
@@ -300,11 +308,13 @@ void* tick_thread() {
             }
             free(message);
             free(to_send);
-      }
-      else {
-          current = current->next;
-          i += 1;
-      }
+        }
+        else {
+            current = current->next;
+            i += 1;
+        }
+        sem_post(&(cur_auc->mutex));
+        //sem_post(&(auction_list->mutex));--------------------------------> should not be here since we need to remove by index
     } // end inner while
   } // end outer while
   
@@ -407,7 +417,8 @@ void* job_thread(){
                 //else
                 else{
                     //malloc new auction
-                        auction_t* new_auction=malloc(sizeof(auction_t));
+                  		auction_t* new_auction=malloc(sizeof(auction_t));
+                        sem_init(&(new_auction->mutex),0,1);
                     //set item_name
                         new_auction->item_name=new_item_name;
                     //set duration
@@ -451,7 +462,6 @@ void* job_thread(){
                     //auction ID; item_name; current_highest_bid; number_of_watchers; number of cycles remaining\n --> repeated
                     //auctions must be ordered by lexicographically ascending (sort by auction_id)
             else if(cur_job->job_protocol->msg_type == 0x23){
-                node_t* auc_list_iter=auction_list->head;
                 if(auction_list->length==0){
                     petr_header* to_send=malloc(sizeof(petr_header));//////////////////////remember to free this
                     to_send->msg_len=0;
@@ -462,8 +472,14 @@ void* job_thread(){
                     char* auc_list_message=malloc(1);
                     *auc_list_message='\0';
                     int auc_list_size=2;
+                  	node_t* auc_list_iter=auction_list->head;
                     while(auc_list_iter!=NULL){
+                      
+                      	sem_wait(&(auction_list->mutex));
+                      
                         auction_t* cur_auc=(auction_t*)(auc_list_iter->value);
+                      	sem_wait(&(cur_auc->mutex));
+                      
                         char* cur_ID=intToStr(cur_auc->ID);
                         char* cur_item_name=cur_auc->item_name;
                         char* cur_max_price=intToStr(cur_auc->max_bid_amount);
@@ -493,6 +509,9 @@ void* job_thread(){
                         myStrcat(auc_list_message,cur_cycles_remain);
                         myStrcat(auc_list_message,"\n");
                         
+                      	sem_post(&(cur_auc->mutex));
+                      	sem_post(&(auction_list->mutex));
+                      	
                         auc_list_iter=auc_list_iter->next;
                     }
                     myStrcat(auc_list_message,"\0");
@@ -915,6 +934,7 @@ int main(int argc, char* argv[]) {
 
     ////////////////////////////////PREFILLING LIST AND INITIALISE GLOBAL VAR/////////////////////////////
             server_fake=malloc(sizeof(user_t));
+            sem_init(&(server_fake->mutex),0,1);
 			server_fake->username="fake";
 			server_fake->password="fake";
 			server_fake->won_auctions=malloc(sizeof(List_t));///////remember to free this
@@ -940,9 +960,11 @@ int main(int argc, char* argv[]) {
           	int i = 1;
           	char* cur = (char*)malloc(sizeof(char));				// current row in file
           	auction_t* auc = malloc(sizeof(auction_t));	// auction information
+            sem_init(&(auc->mutex),0,1);
           	while (fgets(cur, 100, fp) != NULL) {
             	if ((i % 4) == 0) {
                 	auc = (auction_t*)malloc(sizeof(auction_t));
+                    sem_init(&(auc->mutex),0,1);
                     i = 0;
                 }
               	else if (i == 1) {
@@ -1068,6 +1090,7 @@ int main(int argc, char* argv[]) {
                 if(is_new_account==1){
                     //create new user and add to user list
                         user_t* new_user=malloc(sizeof(user_t));
+                        sem_init(&(new_user->mutex),0,1);
                         new_user->username=myStrcpy(username_check);
                         new_user->password=myStrcpy(password_check);
                         new_user->won_auctions=malloc(sizeof(List_t));
