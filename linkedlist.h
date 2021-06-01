@@ -17,7 +17,7 @@ typedef struct list {
 
 
 void insertFront(List_t* list, void* valref) {
-  	sem_wait(list->mutex); // block 
+  	sem_wait(&list->mutex); // block 
   
     if (list->length == 0)
         list->head = NULL;
@@ -32,7 +32,7 @@ void insertFront(List_t* list, void* valref) {
     *head = new_node;
     list->length++; 
   
-  	sem_post(list->mutex); // unblock
+  	sem_post(&list->mutex); // unblock
 }
 
 void insertRear(List_t* list, void* valref) {
@@ -42,7 +42,7 @@ void insertRear(List_t* list, void* valref) {
         return;
     }
   
-  	sem_wait(list->mutex); // block 
+  	sem_wait(&list->mutex); // block 
   
     node_t* head = list->head;
     node_t* current = head;
@@ -55,7 +55,7 @@ void insertRear(List_t* list, void* valref) {
     current->next->next = NULL;
     list->length++;
   
-  	sem_post(list->mutex); // unblock
+  	sem_post(&list->mutex); // unblock
 }
 
 void insertInOrder(List_t* list, void* valref) {
@@ -64,7 +64,7 @@ void insertInOrder(List_t* list, void* valref) {
         return;
     }
 		
-  	sem_wait(list->mutex); // block 
+  	sem_wait(&list->mutex); // block 
   
     node_t** head = &(list->head);
     node_t* new_node;
@@ -100,18 +100,18 @@ void insertInOrder(List_t* list, void* valref) {
     }
     list->length++;
   
-  	sem_post(list->mutex); // unblock
+  	sem_post(&list->mutex); // unblock
 }
 
 void* removeFront(List_t* list) {
-  	sem_wait(list->mutex); // block 
+  	sem_wait(&list->mutex); // block 
   
     node_t** head = &(list->head);
     void* retval = NULL;
     node_t* next_node = NULL;
 
     if (list->length == 0) {
-      	sem_post(list->mutex); // unblock
+      	sem_post(&list->mutex); // unblock
         return NULL;
     }
 
@@ -123,7 +123,7 @@ void* removeFront(List_t* list) {
     *head = next_node;
     free(temp);
 
-  	sem_post(list->mutex); // unblock
+  	sem_post(&list->mutex); // unblock
     return retval;
 }
 
@@ -134,7 +134,7 @@ void* removeRear(List_t* list) {
         return removeFront(list);
     }
 
-  	sem_wait(list->mutex); // block 
+  	sem_wait(&list->mutex); // block 
   
     void* retval = NULL;
     node_t* head = list->head;
@@ -150,7 +150,7 @@ void* removeRear(List_t* list) {
 
     list->length--;
   
-  	sem_post(list->mutex); // unblock
+  	sem_post(&list->mutex); // unblock
     return retval;
 }
 
@@ -159,7 +159,7 @@ void* removeByIndex(List_t* list, int index) {
         return NULL;
     }
   
-		sem_wait(list->mutex); // block 
+		sem_wait(&list->mutex); // block 
   	
     node_t** head = &(list->head);
     void* retval = NULL;
@@ -176,7 +176,7 @@ void* removeByIndex(List_t* list, int index) {
         
 			list->length--;
       
-      sem_post(list->mutex); // unblock
+      sem_post(&list->mutex); // unblock
       return retval;
     }
     while (i++ != index) {
@@ -190,7 +190,7 @@ void* removeByIndex(List_t* list, int index) {
 
     list->length--;
 
-  	sem_post(list->mutex); // unblock
+  	sem_post(&list->mutex); // unblock
     return retval;
 }
 
