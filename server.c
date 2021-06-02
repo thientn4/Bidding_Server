@@ -49,7 +49,9 @@ char buffer[BUFFER_SIZE]; //to receive message from client
 
 user_t* server_fake;
 
-int is_debug=1;
+sem_t job_empty_mutex;
+
+int is_debug=0;
 
 ///////////////////////////////////////////////////HELPER FUNCTION///////////////////////////////////////////////////
 
@@ -370,6 +372,7 @@ void* client_thread(void* user_ptr){
               	sem_wait(&(job_queue->mutex));
                 insertRear(job_queue, job);
                 sem_post(&(job_queue->mutex));
+                sem_post(&job_empty_mutex);
             } // end else
         } // end if
         else{
@@ -392,7 +395,7 @@ N job threads - consumer
 */
 void* job_thread(){
     while(1){
-        sleep(0.00005); ////////////////////////I got segfault if I dont have this line --> not sure why
+        sem_wait(&job_empty_mutex);
         if(job_queue->length!=0){
             //get the top job and dequeue
                 sem_wait(&(job_queue->mutex));
@@ -1042,6 +1045,7 @@ int main(int argc, char* argv[]) {
         }
 
     /////////////////////////////////////////RUN SERVER////////////////////////////////////////////////
+            sem_init(&job_empty_mutex,0,0);
         //spawn tick thread and N job threads
             pthread_t tickID;
             pthread_create(&tickID, NULL, tick_thread, NULL); 
@@ -1204,4 +1208,3 @@ int main(int argc, char* argv[]) {
 
   	return 0;
 }
-
