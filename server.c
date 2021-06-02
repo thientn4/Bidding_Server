@@ -252,7 +252,9 @@ void* tick_thread() {
         if (cur_auc->duration == 0) {
             if(is_debug==1)printf("removing auction with itemname: %s\n",cur_auc->item_name );
             current = current->next;
+            sem_wait(&(auction_list->mutex)); 
             removeByIndex(auction_list, i); // removing by index isn't enough: I need to free
+            sem_post(&(auction_list->mutex));
             /////////////////////update winner and notify other watcher with 0x22 and message aucID\r\nwinner_name\r\nwin_price or aucID\r\n\r\n
             petr_header* to_send=malloc(sizeof(petr_header));
             char* message;
@@ -270,10 +272,14 @@ void* tick_thread() {
                 free(ID_str);
             }
           	else {
-              	sem_wait(&(cur_auc->cur_highest_bidder->mutex));
+              	sem_wait(&(highest->mutex));
               	
                     cur_auc->cur_highest_bidder->balance -= cur_auc->cur_bid_amount;
+              
+              			sem_wait(&(cur_auc->cur_highest_bidder->won_auctions->mutex));
                     insertInOrder(cur_auc->cur_highest_bidder->won_auctions,(void*)cur_auc);
+              			sem_post(&(cur_auc->cur_highest_bidder->won_auctions->mutex));
+              
                     cur_auc->creator->balance+=cur_auc->cur_bid_amount;
                     if(is_debug==1)printf("winner %s balance = %d\n",cur_auc->cur_highest_bidder->username,cur_auc->cur_highest_bidder->balance);
                     if(is_debug==1)printf("seller %s balance = %d\n",cur_auc->creator->username,cur_auc->creator->balance);
@@ -361,7 +367,9 @@ void* client_thread(void* user_ptr){
                     if(is_debug==1)printf("+---------------new_job_body----------------\n");
                     if(is_debug==1)if(job->job_body!=NULL)printf("%s\n",job->job_body);
                     if(is_debug==1)printf("+-------------------------------------------\n");
+              	sem_wait(&(job_queue->mutex));
                 insertRear(job_queue, job);
+                sem_post(&(job_queue->mutex));
             } // end else
         } // end if
         else{
@@ -387,7 +395,9 @@ void* job_thread(){
         sleep(0.00005); ////////////////////////I got segfault if I dont have this line --> not sure why
         if(job_queue->length!=0){
             //get the top job and dequeue
+                sem_wait(&(job_queue->mutex));
                 job_t* cur_job=(job_t*)removeFront(job_queue);////////////////////remember to free this
+                sem_post(&(job_queue->mutex));
             //if job is to create new auction
             if(cur_job->job_protocol->msg_type==0x20){
                 char* new_item_iter=cur_job->job_body;
@@ -443,8 +453,13 @@ void* job_thread(){
                         if(is_debug==1)printf("|       creator: %s\n",new_auction->creator->username);
                         if(is_debug==1)printf("+-------------------------------------------+\n");
                     //add new auction
+                  		sem_wait(&(auction_list->mutex));
                         insertInOrder(auction_list,(void*)new_auction);
+                  		sem_post(&(auction_list->mutex));
+                  		
+                  		sem_wait(&(cur_job->requestor->listing_auctions->mutex));
                         insertInOrder(cur_job->requestor->listing_auctions,(void*)new_auction);
+                  		sem_post(&(cur_job->requestor->listing_auctions->mutex));
                     //respond to client with ANCREATE and new auction's ID
                         char* ID_to_send=intToStr(new_auction->ID);    /////////////remember to convert ID from int to string
                         petr_header* to_send=malloc(sizeof(petr_header));//////////////////////remember to free this
@@ -550,7 +565,9 @@ void* job_thread(){
                     //else
                   	else {
                         //add requester to auction's watcher_list
+                      		sem_wait(&(auc->watching_users->mutex));
                             insertRear(auc->watching_users,(void*)(cur_job->requestor));
+                      		sem_post(&(auc->watching_users->mutex));
                         //respond to client with ANWATCH and name of item
                             char* max_bid_str=intToStr(auc->max_bid_amount);
                             char* watch_message=malloc(myStrlen(auc->item_name)+2+myStrlen(max_bid_str));
@@ -586,13 +603,13 @@ void* job_thread(){
                         int index_to_leave=0;
                         node_t* cur_leave_iter=auc_to_leave->watching_users->head; 
                     //if requester is in watcher_list of item --> remove him/her
-                  		sem_wait(&(auc_to_leave->watching_user->mutex));
+                  		sem_wait(&(auc_to_leave->watching_users->mutex));
                   
                         while(cur_leave_iter!=NULL){
                             user_t* cur_user=(user_t*)(cur_leave_iter->value);
                             if(myStrcmp(cur_job->requestor->username,cur_user->username)==0){
                                 removeByIndex(auc_to_leave->watching_users,index_to_leave);
-                                break;
+                                break; 
                             }
                             cur_leave_iter=cur_leave_iter->next;
                             index_to_leave++;
@@ -604,7 +621,7 @@ void* job_thread(){
                         wr_msg(cur_job->requestor->file_descriptor,to_send,NULL);
                         free(to_send);
                   
-                  		sem_post(&(auc_to_leave->watching_user->mutex));
+                  		sem_post(&(auc_to_leave->watching_users->mutex)); //it is outside of loop so it is ok
                 }
             }  
             //if job is to make a bid
@@ -1014,7 +1031,10 @@ int main(int argc, char* argv[]) {
                     sem_init(&(auc->watching_users->mutex),0,1);
                     auc->cur_highest_bidder=NULL;
                     if(is_debug==1)printf("cur_highest_bidder=NULL\n");
+                  	
+                  	sem_wait(&(auction_list->mutex));
               		insertInOrder(auction_list, (void*)auc);
+                  	sem_post(&(auction_list->mutex));
                 }
               	i++;
           	}
@@ -1109,7 +1129,7 @@ int main(int argc, char* argv[]) {
                                 if(is_debug==1)printf("existing account logged in\n");
                         }
                         is_new_account=0;
-			sem_post(&(cur_user->mutex));"
+                        sem_post(&(cur_user->mutex));
                         break;
                     }
                   	sem_post(&(cur_user->mutex));
@@ -1132,7 +1152,10 @@ int main(int argc, char* argv[]) {
                         new_user->file_descriptor=*client_fd;
                         new_user->balance=0;
                         new_user->is_online=1;
+                  
+                  		sem_wait(&(user_list->mutex));
                         insertRear(user_list,new_user);
+                  		sem_post(&(user_list->mutex));
                         if(is_debug==1)printf("+-----------new_user_info---------------\n");
                         if(is_debug==1)printf("|   username: %s\n",new_user->username);
                         if(is_debug==1)printf("|   password: %s\n",new_user->password);
