@@ -1109,6 +1109,7 @@ int main(int argc, char* argv[]) {
                                 if(is_debug==1)printf("existing account logged in\n");
                         }
                         is_new_account=0;
+			sem_post(&(cur_user->mutex));"
                         break;
                     }
                   	sem_post(&(cur_user->mutex));
