@@ -372,7 +372,7 @@ void* client_thread(void* user_ptr){
               	sem_wait(&(job_queue->mutex));
                 insertRear(job_queue, job);
                 sem_post(&(job_queue->mutex));
-                sem_post(&job_empty_mutex);
+                sem_post(&job_empty_mutex);//////////to add slots -----------------> I added this
             } // end else
         } // end if
         else{
@@ -395,7 +395,7 @@ N job threads - consumer
 */
 void* job_thread(){
     while(1){
-        sem_wait(&job_empty_mutex);
+        sem_wait(&job_empty_mutex);////////////////to get slots -------------------------> I added this
         if(job_queue->length!=0){
             //get the top job and dequeue
                 sem_wait(&(job_queue->mutex));
@@ -1045,7 +1045,7 @@ int main(int argc, char* argv[]) {
         }
 
     /////////////////////////////////////////RUN SERVER////////////////////////////////////////////////
-            sem_init(&job_empty_mutex,0,0);
+            sem_init(&job_empty_mutex,0,0);//////////// number of slots is initially empty cuz we have no job yet ---------> I added this
         //spawn tick thread and N job threads
             pthread_t tickID;
             pthread_create(&tickID, NULL, tick_thread, NULL); 
