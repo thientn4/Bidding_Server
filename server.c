@@ -1,16 +1,6 @@
 /*
-
-
-
-
-
             not thread safe note: atoi, strlen
             remember to do auction sorting based on ID
-
-
-
-
-
             
 */
 
@@ -138,7 +128,7 @@ int myStrlen(char* to_count){
 int myAtoi(char* source){
     int to_return=0;
     char* atoi_iter=source;
-    while(*atoi_iter!='\0'&&*atoi_iter!='\n'){
+    while(*atoi_iter<='9'&&*atoi_iter>='0'){
         to_return*=10;
         to_return+=*atoi_iter-'0';
         atoi_iter++;
@@ -624,6 +614,7 @@ void* job_thread(){
                 }
                 //else
                 else{
+                    sem_wait(&(auc_to_bid->mutex));
                         int is_watching=0;
                         node_t* watcher_iter=auc_to_bid->watching_users->head;
                         if(is_debug==1)printf("------------wacher of this item----------\n");
@@ -695,6 +686,7 @@ void* job_thread(){
                                 free(to_send);
                         }
                     }
+                    sem_post(&(auc_to_bid->mutex));
                 }
             }
             //if job is to list all active user
@@ -714,7 +706,8 @@ void* job_thread(){
                   	
                   	char* msg = (char*)malloc(sizeof(char));
                   	*msg = '\0';
-                  
+
+                    sem_wait(&(user_list->mutex));
                     node_t* head = user_list->head;
                     node_t* current = head;
                     while (current != NULL) { 
@@ -732,6 +725,7 @@ void* job_thread(){
                   	wr_msg(cur_job->requestor->file_descriptor, return_msg, msg);
                   	free(return_msg);
                   	free(msg);
+                    sem_post(&(user_list->mutex));
                 }
             }
             //if job is to list all won auctions of the sender
@@ -752,7 +746,9 @@ void* job_thread(){
                   
                   	char* msg = malloc(1);
                   	*msg = '\0';
-                  
+
+                    sem_wait(&(cur_job->requestor->won_auctions->mutex));
+
                     node_t* head = cur_job->requestor->won_auctions->head;
                     node_t* current = head;
                     while (current != NULL) {
@@ -793,6 +789,8 @@ void* job_thread(){
                   	wr_msg(cur_job->requestor->file_descriptor, return_msg, msg);
                   	free(return_msg);
                   	free(msg);
+
+                    sem_post(&(cur_job->requestor->won_auctions->mutex));
                 }
             }
             //if job is to list of all created auctions of the sender--------------------------> does not work
@@ -816,6 +814,7 @@ void* job_thread(){
                   	*msg = '\0';
                     int size=1;
                   
+                    sem_wait(&(cur_job->requestor->listing_auctions->mutex));
                     node_t* current = cur_job->requestor->listing_auctions->head;
                     while (current != NULL) {
                         auction_t* cur_auc=(auction_t*)(current->value);
@@ -845,6 +844,7 @@ void* job_thread(){
                     if(is_debug==1)printf("<%s>\n",msg);
                     wr_msg(cur_job->requestor->file_descriptor,to_send,msg);
                     free(to_send);
+                    sem_post(&(cur_job->requestor->listing_auctions->mutex));
                 }
             }
             //if job is to show the balance of the sender
@@ -853,6 +853,7 @@ void* job_thread(){
             else if (cur_job->job_protocol->msg_type == 0x35) {
               	char* bal;
               	petr_header* return_msg = (petr_header*)malloc(sizeof(petr_header));
+                sem_wait(&(cur_job->requestor->mutex));
                 if(cur_job->requestor->balance>=0){
                     bal = intToStr(cur_job->requestor->balance);
                     return_msg->msg_len = myStrlen(bal) + 1;
@@ -872,6 +873,7 @@ void* job_thread(){
                 }
                 free(return_msg);
               	free(bal);
+                sem_post(&(cur_job->requestor->mutex));
             }
         }
     }
@@ -972,7 +974,7 @@ int main(int argc, char* argv[]) {
                   	char* temp_cur = (char*)malloc(sizeof(char) * (myStrlen(cur) + 1));
                     temp_cur=myStrcpy(cur);
                     auc->item_name = temp_cur;
-                    *(temp_cur+myStrlen(temp_cur)-1)='\0';
+                    *(temp_cur+myStrlen(temp_cur)-2)='\0';
                   
                   	auc->ID = auction_ID;
                   	auction_ID++;
