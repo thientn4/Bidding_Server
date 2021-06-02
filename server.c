@@ -257,7 +257,7 @@ void* tick_thread() {
             petr_header* to_send=malloc(sizeof(petr_header));
             char* message;
             if(is_debug==1)printf("check for winner\n");
-            user_t* highest=cur_auc->cur_highest_bidder;
+            user_t* highest=cur_auc->cur_highest_bidder; 
             if(highest==NULL){
                 if(is_debug==1)printf("no winner for this ended auction\n");
                 char* ID_str=intToStr(cur_auc->ID);
@@ -268,8 +268,11 @@ void* tick_thread() {
                 to_send->msg_type=0x22;
                 to_send->msg_len=myStrlen(message)+1;
                 free(ID_str);
-            }else{
-                    cur_auc->cur_highest_bidder->balance-=cur_auc->cur_bid_amount;
+            }
+          	else {
+              	sem_wait(&(cur_auc->cur_highest_bidder->mutex));
+              	
+                    cur_auc->cur_highest_bidder->balance -= cur_auc->cur_bid_amount;
                     insertInOrder(cur_auc->cur_highest_bidder->won_auctions,(void*)cur_auc);
                     cur_auc->creator->balance+=cur_auc->cur_bid_amount;
                     if(is_debug==1)printf("winner %s balance = %d\n",cur_auc->cur_highest_bidder->username,cur_auc->cur_highest_bidder->balance);
@@ -288,12 +291,14 @@ void* tick_thread() {
                 to_send->msg_len=myStrlen(message)+1;
                 free(ID_str);
                 free(price_str);
+              
+              	sem_post(&(cur_auc->cur_highest_bidder->mutex));
             }
             if(is_debug==1)printf("notify other watchers\n");
             node_t* cur_watch_iter=cur_auc->watching_users->head;
             while(cur_watch_iter!=NULL){
                 user_t* cur_watcher=(user_t*)(cur_watch_iter->value);
-                wr_msg(cur_watcher->file_descriptor,to_send,message);
+              	wr_msg(cur_watcher->file_descriptor,to_send,message);
                 cur_watch_iter=cur_watch_iter->next;
             }
             free(message);
@@ -336,6 +341,7 @@ void* client_thread(void* user_ptr){
                         to_send->msg_type=0x00;
                         wr_msg(user->file_descriptor,to_send,NULL);
                         free(to_send);
+              			user->is_online=0;
                 break;
             }
             else {
@@ -360,6 +366,7 @@ void* client_thread(void* user_ptr){
         } // end if
         else{
             if(is_debug==1)printf("%s have logged out with controlC\n",user->username);
+          	user->is_online=0;
             break;
         }
     } // end while
@@ -453,24 +460,24 @@ void* job_thread(){
                     //auction ID; item_name; current_highest_bid; number_of_watchers; number of cycles remaining\n --> repeated
                     //auctions must be ordered by lexicographically ascending (sort by auction_id)
             else if(cur_job->job_protocol->msg_type == 0x23){
+              	sem_wait(&(auction_list->mutex));
                 if(auction_list->length==0){
                     petr_header* to_send=malloc(sizeof(petr_header));//////////////////////remember to free this
                     to_send->msg_len=0;
                     to_send->msg_type=0x23;
                     wr_msg(cur_job->requestor->file_descriptor,to_send,NULL);
                     free(to_send);
-                }else{
+                }
+              	else{
                     char* auc_list_message=malloc(1);
                     *auc_list_message='\0';
                     int auc_list_size=2;
                   	node_t* auc_list_iter=auction_list->head;
                     while(auc_list_iter!=NULL){
                       
-                      	sem_wait(&(auction_list->mutex));
-                      
                         auction_t* cur_auc=(auction_t*)(auc_list_iter->value);
                       	sem_wait(&(cur_auc->mutex));
-                      
+                      	
                         char* cur_ID=intToStr(cur_auc->ID);
                         char* cur_item_name=cur_auc->item_name;
                         char* cur_max_price=intToStr(cur_auc->max_bid_amount);
@@ -501,7 +508,6 @@ void* job_thread(){
                         myStrcat(auc_list_message,"\n");
                         
                       	sem_post(&(cur_auc->mutex));
-                      	sem_post(&(auction_list->mutex));
                       	
                         auc_list_iter=auc_list_iter->next;
                     }
@@ -517,6 +523,7 @@ void* job_thread(){
                     free(auc_list_message);
                     free(to_send);
                 }
+              	sem_post(&(auction_list->mutex));
             }
             //if job is to watch an auction
             else if (cur_job->job_protocol->msg_type == 0x24) {
@@ -533,6 +540,7 @@ void* job_thread(){
                 }
                 //else
               	else {
+                  	sem_wait(&(auc->mutex));
                     //if auction reached a maximum number of watchers (ignore if we support infinite watchers) --> should ask professor again
                   	if (auc->watching_users->length > 5) {
                         //respond to client with EANFULL
@@ -556,6 +564,7 @@ void* job_thread(){
                             free(watch_message);
                             free(max_bid_str);
                     }
+                  	sem_post(&(auc->mutex));
                 }
                 free(return_msg);
             }
@@ -575,8 +584,10 @@ void* job_thread(){
                 //else
                 else{
                         int index_to_leave=0;
-                        node_t* cur_leave_iter=auc_to_leave->watching_users->head;
+                        node_t* cur_leave_iter=auc_to_leave->watching_users->head; 
                     //if requester is in watcher_list of item --> remove him/her
+                  		sem_wait(&(auc_to_leave->watching_user->mutex));
+                  
                         while(cur_leave_iter!=NULL){
                             user_t* cur_user=(user_t*)(cur_leave_iter->value);
                             if(myStrcmp(cur_job->requestor->username,cur_user->username)==0){
@@ -592,11 +603,13 @@ void* job_thread(){
                         to_send->msg_type=0x00;
                         wr_msg(cur_job->requestor->file_descriptor,to_send,NULL);
                         free(to_send);
+                  
+                  		sem_post(&(auc_to_leave->watching_user->mutex));
                 }
-            }
+            }  
             //if job is to make a bid
             else if(cur_job->job_protocol->msg_type==0x26){
-                    char* bid_iter=cur_job->job_body;
+                    char* bid_iter=cur_job->job_body; 
                         while(*bid_iter!='\n')bid_iter++;
                         *(bid_iter-1)='\0';
                     int bid_amount=myAtoi(bid_iter+1);
@@ -613,20 +626,24 @@ void* job_thread(){
                         free(to_send);
                 }
                 //else
-                else{
+                else{ 
                     sem_wait(&(auc_to_bid->mutex));
                         int is_watching=0;
-                        node_t* watcher_iter=auc_to_bid->watching_users->head;
+                  		sem_wait(&(auc_to_bid->watching_users->mutex));
+                        node_t* watcher_iter=auc_to_bid->watching_users->head; 
                         if(is_debug==1)printf("------------wacher of this item----------\n");
                         while(watcher_iter!=NULL){
                             user_t* cur_watcher=(user_t*)(watcher_iter->value);
+                          	// does it need it?
+                          	//yeah user name is never changed so no need
                             printf("%s\n",cur_watcher->username);
                             if(myStrcmp(cur_watcher->username,cur_job->requestor->username)==0){
                                 printf("-->this user is watching this item\n");
-                                is_watching=1;
+                                is_watching=1;	
                             }
                             watcher_iter=watcher_iter->next;
                         }
+                  		sem_post(&(auc_to_bid->watching_users->mutex));
                         if(is_debug==1)printf("-----------------------------------------\n");
                     //if user is not watching this item or is both requester and creator of this item
                     if(is_watching==0||myStrcmp(cur_job->requestor->username,auc_to_bid->creator->username)==0){
@@ -752,7 +769,8 @@ void* job_thread(){
                     node_t* head = cur_job->requestor->won_auctions->head;
                     node_t* current = head;
                     while (current != NULL) {
-                        auction_t* auction = (auction_t*)current->value;
+                        auction_t* auction = (auction_t*)current->value; 
+                      	sem_wait(&(auction->mutex));
                       
                       	int ID_length = 1, temp_ID = auction->ID;
                       	while (temp_ID > 0) {
@@ -779,6 +797,8 @@ void* job_thread(){
                       	myStrcat(msg, str);
                       	myStrcat(msg, "\n");
                       	free(str);
+                      
+                      	sem_post(&(auction->mutex));
                       	
                         current = current->next;
                     }
@@ -817,7 +837,8 @@ void* job_thread(){
                     sem_wait(&(cur_job->requestor->listing_auctions->mutex));
                     node_t* current = cur_job->requestor->listing_auctions->head;
                     while (current != NULL) {
-                        auction_t* cur_auc=(auction_t*)(current->value);
+                      	auction_t* cur_auc=(auction_t*)(current->value);
+                      	sem_wait(&(cur_auc->mutex));
                         if(cur_auc->duration==0){
                             char* ID_str=intToStr(cur_auc->ID);
                             char* win_price_str=intToStr(cur_auc->cur_bid_amount);
@@ -836,6 +857,7 @@ void* job_thread(){
                             myStrcat(msg,win_price_str);
                             myStrcat(msg,"\n");
                         }
+                      	sem_post(&(cur_auc->mutex));
                         current=current->next;
                     }
                     petr_header* to_send=malloc(sizeof(petr_header));//////////////////////remember to free this
@@ -1055,6 +1077,7 @@ int main(int argc, char* argv[]) {
     			node_t* user_iter = user_list->head;
                 while(user_iter!=NULL){
                     user_t* cur_user=(user_t*)user_iter->value;
+                  	sem_wait(&(cur_user->mutex));
                     if(myStrcmp(cur_user->username,username_check)==0){
                         if(myStrcmp(cur_user->password,password_check)!=0 || cur_user->is_online==1){
                             //reject connection
@@ -1065,6 +1088,7 @@ int main(int argc, char* argv[]) {
                                     wr_msg(*client_fd,to_send,NULL);
                                     if(is_debug==1)printf("incorrect password\n");
                             }
+        
                             else if (cur_user->is_online==1){
                                 //send message with type=0x1A and name=EUSRLGDIN
                                     to_send->msg_len=0;
@@ -1087,11 +1111,13 @@ int main(int argc, char* argv[]) {
                         is_new_account=0;
                         break;
                     }
+                  	sem_post(&(cur_user->mutex));
                     user_iter=user_iter->next;
                 }
 
                 if(is_new_account==1){
                     //create new user and add to user list
+                  
                         user_t* new_user=malloc(sizeof(user_t));
                         sem_init(&(new_user->mutex),0,1);
                         new_user->username=myStrcpy(username_check);
@@ -1154,3 +1180,4 @@ int main(int argc, char* argv[]) {
 
   	return 0;
 }
+
