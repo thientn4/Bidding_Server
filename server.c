@@ -343,6 +343,7 @@ void* client_thread(void* user_ptr){
         int err = rd_msgheader(user->file_descriptor, job->job_protocol);
       	if (err == 0) {
             if (job->job_protocol->msg_type == 0x11){ 
+              	free(job); // abner-remember to check
                 if(is_debug==1)printf("%s have logged out\n",user->username);
                         petr_header* to_send=malloc(sizeof(petr_header));
                         to_send->msg_len=0;
@@ -376,6 +377,7 @@ void* client_thread(void* user_ptr){
             } // end else
         } // end if
         else{
+          	free(job); // abner-remember to check
             if(is_debug==1)printf("%s have logged out with controlC\n",user->username);
           	user->is_online=0;
             break;
@@ -685,6 +687,68 @@ void* job_thread(){
                                 to_send->msg_len=0;
                                 to_send->msg_type=0x2E;
                                 wr_msg(cur_job->requestor->file_descriptor,to_send,NULL);
+                                free(to_send);
+                        }
+                      	//if is buy instantly
+                        else if(auc_to_bid->max_bid_amount !=0 && auc_to_bid->max_bid_amount<=bid_amount){
+                                //search and remove by index
+                                    int i=0;
+                                    sem_wait(&(auction_list->mutex));
+                                    node_t* current=auction_list->head;
+                                    while(current!=NULL){
+                                        if(((auction_t*)(current->value))->ID==id_to_bid)break;
+                                        i++;
+                                        current=current->next;
+                                    }
+                                    if(is_debug==1)printf("removing auction with itemname: %s\n",auc_to_bid->item_name );
+                                    removeByIndex(auction_list, i); // removing by index isn't enough: I need to free
+                                    sem_post(&(auction_list->mutex));
+                                //update winner and notify other watcher with 0x22 and message aucID\r\nwinner_name\r\nwin_price
+                                    petr_header* to_send=malloc(sizeof(petr_header));
+                                    char* message;
+                                    if(is_debug==1)printf("check for winner\n");
+                                    auc_to_bid->cur_bid_amount=bid_amount;
+                                    auc_to_bid->cur_highest_bidder=cur_job->requestor;
+
+                                    user_t* highest=auc_to_bid->cur_highest_bidder; 
+                                //preparing the message
+                                    sem_wait(&(highest->mutex));
+                                    
+                                        auc_to_bid->cur_highest_bidder->balance -= auc_to_bid->cur_bid_amount;
+                                
+                                            sem_wait(&(auc_to_bid->cur_highest_bidder->won_auctions->mutex));
+                                        insertInOrder(auc_to_bid->cur_highest_bidder->won_auctions,(void*)auc_to_bid);
+                                            sem_post(&(auc_to_bid->cur_highest_bidder->won_auctions->mutex));
+                                
+                                        auc_to_bid->creator->balance+=auc_to_bid->cur_bid_amount;
+                                        if(is_debug==1)printf("winner %s balance = %d\n",auc_to_bid->cur_highest_bidder->username,auc_to_bid->cur_highest_bidder->balance);
+                                        if(is_debug==1)printf("seller %s balance = %d\n",auc_to_bid->creator->username,auc_to_bid->creator->balance);
+                                    if(is_debug==1)printf("user %s won this auction\n",auc_to_bid->cur_highest_bidder->username);
+                                    char* ID_str=intToStr(auc_to_bid->ID);
+                                    char* price_str=intToStr(auc_to_bid->cur_bid_amount);
+                                    message=malloc(myStrlen(ID_str)+myStrlen(price_str)+myStrlen(auc_to_bid->cur_highest_bidder->username)+5);
+                                    *message='\0';
+                                    myStrcat(message,ID_str);
+                                    myStrcat(message,"\r\n");
+                                    myStrcat(message,auc_to_bid->cur_highest_bidder->username);
+                                    myStrcat(message,"\r\n");
+                                    myStrcat(message,price_str);
+                                    to_send->msg_type=0x22;
+                                    to_send->msg_len=myStrlen(message)+1;
+                                    free(ID_str);
+                                    free(price_str);
+                                
+                                    sem_post(&(auc_to_bid->cur_highest_bidder->mutex));
+                                //notify all other watcher
+                                    if(is_debug==1)printf("notify other watchers\n");
+                                    node_t* cur_watch_iter=auc_to_bid->watching_users->head;
+                                    while(cur_watch_iter!=NULL){
+                                        user_t* cur_watcher=(user_t*)(cur_watch_iter->value);
+                                        //if(strcmp(cur_watcher->username,cur_job->requestor->username)!=0)
+                                            wr_msg(cur_watcher->file_descriptor,to_send,message);
+                                        cur_watch_iter=cur_watch_iter->next;
+                                    }
+                                free(message);
                                 free(to_send);
                         }
                         //if valid
@@ -1017,7 +1081,7 @@ int main(int argc, char* argv[]) {
                     temp_cur=myStrcpy(cur);
                     auc->item_name = temp_cur;
                     *(temp_cur+myStrlen(temp_cur)-2)='\0';
-                  
+                  	// free(cur); // abner-remember to check
                   	auc->ID = auction_ID;
                   	auction_ID++;
                 }
@@ -1096,7 +1160,7 @@ int main(int argc, char* argv[]) {
                 if(is_debug==1)printf("------------------------password received: %s\n",password_check);
 
                 int is_new_account=1;
-                petr_header* to_send=malloc(sizeof(petr_header));//////////////////////remember to free this
+                petr_header* to_send=malloc(sizeof(petr_header));//////////////////////remember to free this free(job); // abner-remember to check
 
     			node_t* user_iter = user_list->head;
                 while(user_iter!=NULL){
@@ -1208,4 +1272,3 @@ int main(int argc, char* argv[]) {
 
   	return 0;
 }
-
