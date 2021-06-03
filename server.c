@@ -349,6 +349,7 @@ void* client_thread(void* user_ptr){
                         to_send->msg_type=0x00;
                         wr_msg(user->file_descriptor,to_send,NULL);
                         free(to_send);
+		    	free(job);
               			user->is_online=0;
                 break;
             }
