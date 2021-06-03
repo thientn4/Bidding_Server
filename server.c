@@ -64,7 +64,7 @@ void printInstructions(){
     printf("AUCTION_FILENAME    File to read auction item information from at the start of the server.\n");
 }
 
-char* myStrcpy(char* source){
+char* myStrcpy(char* source){//------------------------> this malloc new space
     char* to_return=malloc(1);
     int size=1;
     while(*source!='\0'){
@@ -77,7 +77,7 @@ char* myStrcpy(char* source){
     return to_return;
 }
 
-char* intToStr(int source){
+char* intToStr(int source){//------------------------> this malloc new space
     char* to_return=malloc(1);
     if(source==0){
         *to_return='0';
@@ -343,7 +343,7 @@ void* client_thread(void* user_ptr){
         int err = rd_msgheader(user->file_descriptor, job->job_protocol);
       	if (err == 0) {
             if (job->job_protocol->msg_type == 0x11){ 
-              	free(job); // abner-remember to check
+              	free(job); 
                 if(is_debug==1)printf("%s have logged out\n",user->username);
                         petr_header* to_send=malloc(sizeof(petr_header));
                         to_send->msg_len=0;
@@ -377,7 +377,7 @@ void* client_thread(void* user_ptr){
             } // end else
         } // end if
         else{
-          	free(job); // abner-remember to check
+          	free(job);
             if(is_debug==1)printf("%s have logged out with controlC\n",user->username);
           	user->is_online=0;
             break;
@@ -691,6 +691,10 @@ void* job_thread(){
                         }
                       	//if is buy instantly
                         else if(auc_to_bid->max_bid_amount !=0 && auc_to_bid->max_bid_amount<=bid_amount){
+                                    petr_header* to_send=malloc(sizeof(petr_header));//////////////////////remember to free this
+                                    to_send->msg_len=0;
+                                    to_send->msg_type=0x00;
+                                    wr_msg(cur_job->requestor->file_descriptor,to_send,NULL);
                                 //search and remove by index
                                     int i=0;
                                     sem_wait(&(auction_list->mutex));
@@ -704,11 +708,12 @@ void* job_thread(){
                                     removeByIndex(auction_list, i); // removing by index isn't enough: I need to free
                                     sem_post(&(auction_list->mutex));
                                 //update winner and notify other watcher with 0x22 and message aucID\r\nwinner_name\r\nwin_price
-                                    petr_header* to_send=malloc(sizeof(petr_header));
+                                    //petr_header* to_send=malloc(sizeof(petr_header));
                                     char* message;
                                     if(is_debug==1)printf("check for winner\n");
                                     auc_to_bid->cur_bid_amount=bid_amount;
                                     auc_to_bid->cur_highest_bidder=cur_job->requestor;
+                                    auc_to_bid->duration=0;
 
                                     user_t* highest=auc_to_bid->cur_highest_bidder; 
                                 //preparing the message
@@ -744,7 +749,6 @@ void* job_thread(){
                                     node_t* cur_watch_iter=auc_to_bid->watching_users->head;
                                     while(cur_watch_iter!=NULL){
                                         user_t* cur_watcher=(user_t*)(cur_watch_iter->value);
-                                        //if(strcmp(cur_watcher->username,cur_job->requestor->username)!=0)
                                             wr_msg(cur_watcher->file_descriptor,to_send,message);
                                         cur_watch_iter=cur_watch_iter->next;
                                     }
@@ -1054,7 +1058,7 @@ int main(int argc, char* argv[]) {
             server_fake->listing_auctions->comparator= List_tComparator;
 			server_fake->balance=0;
 			server_fake->file_descriptor=-1;/////////not sure if I should set this to -1
-			server_fake->is_online=1;
+			server_fake->is_online=0;
         auction_list = (List_t*)malloc(sizeof(List_t));
         sem_init(&(auction_list->mutex),0,1);
         auction_list->comparator= List_tComparator;
@@ -1067,21 +1071,19 @@ int main(int argc, char* argv[]) {
             }
           	
           	int i = 1;
-          	char* cur = (char*)malloc(sizeof(char));				// current row in file
+          	char* cur = (char*)malloc(sizeof(char) * 1024);				// current row in file
           	auction_t* auc = malloc(sizeof(auction_t));	// auction information
             sem_init(&(auc->mutex),0,1);
-          	while (fgets(cur, 100, fp) != NULL) {
+          	while (fgets(cur, 1024, fp) != NULL) {
             	if ((i % 4) == 0) {
                 	auc = (auction_t*)malloc(sizeof(auction_t));
                     sem_init(&(auc->mutex),0,1);
                     i = 0;
                 }
               	else if (i == 1) {
-                  	char* temp_cur = (char*)malloc(sizeof(char) * (myStrlen(cur) + 1));
-                    temp_cur=myStrcpy(cur);
+                    char* temp_cur = myStrcpy(cur);
                     auc->item_name = temp_cur;
                     *(temp_cur+myStrlen(temp_cur)-2)='\0';
-                  	// free(cur); // abner-remember to check
                   	auc->ID = auction_ID;
                   	auction_ID++;
                 }
@@ -1101,11 +1103,13 @@ int main(int argc, char* argv[]) {
                   	
                   	sem_wait(&(auction_list->mutex));
               		insertInOrder(auction_list, (void*)auc);
+                    insertInOrder(server_fake->listing_auctions,(void*)auc);
                   	sem_post(&(auction_list->mutex));
                 }
               	i++;
           	}
           	auc = NULL; 	// avoiding future error 
+          	free(cur);
         }
 
     /////////////////////////////////////////RUN SERVER////////////////////////////////////////////////
@@ -1120,6 +1124,7 @@ int main(int argc, char* argv[]) {
                 iter_job++;
             }
         user_list=(List_t*)malloc(sizeof(List_t));
+            insertRear(user_list,(void*)server_fake);
         sem_init(&(user_list->mutex),0,1);
         job_queue=(List_t*)malloc(sizeof(List_t));
         sem_init(&(job_queue->mutex),0,1);
@@ -1160,8 +1165,8 @@ int main(int argc, char* argv[]) {
                 if(is_debug==1)printf("------------------------password received: %s\n",password_check);
 
                 int is_new_account=1;
-                petr_header* to_send=malloc(sizeof(petr_header));//////////////////////remember to free this free(job); // abner-remember to check
-
+                petr_header* to_send=malloc(sizeof(petr_header));//////////////////////remember to free this 
+              
     			node_t* user_iter = user_list->head;
                 while(user_iter!=NULL){
                     user_t* cur_user=(user_t*)user_iter->value;
@@ -1238,7 +1243,7 @@ int main(int argc, char* argv[]) {
                         pthread_create(&clientID, NULL, client_thread, (void*)new_user); 
                         if(is_debug==1)printf("new account logged in\n");
                 }
-                
+                free(to_send);
             }
         }
         close(listen_fd);
