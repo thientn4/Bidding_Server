@@ -51,7 +51,7 @@ user_t* server_fake;
 
 sem_t job_empty_mutex;
 
-int is_debug=0;
+int is_debug=1;
 
 ///////////////////////////////////////////////////HELPER FUNCTION///////////////////////////////////////////////////
 
@@ -349,7 +349,6 @@ void* client_thread(void* user_ptr){
                         to_send->msg_type=0x00;
                         wr_msg(user->file_descriptor,to_send,NULL);
                         free(to_send);
-		    	free(job);
               			user->is_online=0;
                 break;
             }
@@ -373,7 +372,7 @@ void* client_thread(void* user_ptr){
               	sem_wait(&(job_queue->mutex));
                 insertRear(job_queue, job);
                 sem_post(&(job_queue->mutex));
-                sem_post(&job_empty_mutex);//////////to add slots -----------------> I added this
+                sem_post(&job_empty_mutex);
             } // end else
         } // end if
         else{
@@ -396,7 +395,7 @@ N job threads - consumer
 */
 void* job_thread(){
     while(1){
-        sem_wait(&job_empty_mutex);////////////////to get slots -------------------------> I added this
+        sem_wait(&job_empty_mutex);
         if(job_queue->length!=0){
             //get the top job and dequeue
                 sem_wait(&(job_queue->mutex));
@@ -750,7 +749,7 @@ void* job_thread(){
                     node_t* current = head;
                     while (current != NULL) { 
                         user_t* user = (user_t*)current->value;
-                      	if (myStrcmp(user->username, cur_job->requestor->username) != 0) {
+                      	if (myStrcmp(user->username, cur_job->requestor->username) != 0 && user->is_online==1) {
                           	msg = (char*)realloc(msg, sizeof(char) * (myStrlen(msg) + myStrlen(user->username) + 2));
                           	myStrcat(msg, user->username);
                           	myStrcat(msg, "\n");
@@ -1046,7 +1045,7 @@ int main(int argc, char* argv[]) {
         }
 
     /////////////////////////////////////////RUN SERVER////////////////////////////////////////////////
-            sem_init(&job_empty_mutex,0,0);//////////// number of slots is initially empty cuz we have no job yet ---------> I added this
+            sem_init(&job_empty_mutex,0,0);
         //spawn tick thread and N job threads
             pthread_t tickID;
             pthread_create(&tickID, NULL, tick_thread, NULL); 
@@ -1209,3 +1208,4 @@ int main(int argc, char* argv[]) {
 
   	return 0;
 }
+
