@@ -176,7 +176,15 @@ int List_tComparator(void* lhs, void* rhs) {
 
    auction_t* l = (auction_t*)lhs;
    auction_t* r = (auction_t*)rhs;
-   return myStrcmp(intToStr(l->ID), intToStr(r->ID));
+  
+   char* leftID = intToStr(l->ID);
+   char* rightID = intToStr(r->ID);
+   int return_val = myStrcmp(leftID, rightID); 
+  
+   free(leftID);
+   free(rightID);
+  
+   return return_val;
 }
 
 /////////////////////////////////////INITIATE SOCKET IN SERVER//////////////////////////////////////////
@@ -426,6 +434,7 @@ void* job_thread(){
                         to_send->msg_type=0x2F;
                         wr_msg(cur_job->requestor->file_descriptor,to_send,NULL);
                         free(to_send);
+                  		free(new_item_name);
                 }
                 //else
                 else{
@@ -526,7 +535,13 @@ void* job_thread(){
                         myStrcat(auc_list_message,";");
                         myStrcat(auc_list_message,cur_cycles_remain);
                         myStrcat(auc_list_message,"\n");
-                        
+                      
+                      	free(cur_highest_bid);
+                      	free(cur_ID);
+                        free(cur_max_price);
+                      	free(cur_watcher_count);
+                        free(cur_cycles_remain);
+                      
                       	sem_post(&(cur_auc->mutex));
                       	
                         auc_list_iter=auc_list_iter->next;
@@ -944,6 +959,9 @@ void* job_thread(){
                             myStrcat(msg,";");
                             myStrcat(msg,win_price_str);
                             myStrcat(msg,"\n");
+                          
+                          	free(ID_str);
+                          	free(win_price_str);
                         }
                       	sem_post(&(cur_auc->mutex));
                         current=current->next;
