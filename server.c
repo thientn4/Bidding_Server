@@ -52,7 +52,7 @@ user_t* server_fake = NULL;
 
 sem_t job_empty_mutex;
 
-int is_debug=0;
+int is_debug=1;
 
 /////////////////////////////////////////////MEMORY CLEANING FUNCTION////////////////////////////////////////////////
 void freeAuction(auction_t* auction) {
@@ -1229,13 +1229,13 @@ int main(int argc, char* argv[]) {
             thread_list=malloc(sizeof(List_t));
             sem_init(&job_empty_mutex,0,0);
         //spawn tick thread and N job threads
-            pthread_t tickID;
+            pthread_t tickID=0;
             pthread_create(&tickID, NULL, tick_thread, NULL); ///-------------------------.LEAKS
             insertFront(thread_list,&tickID);
             int iter_job=0;
             while(iter_job<num_job_thread){
                 if(is_debug==1)printf("job thread created\n");
-                pthread_t job_thread_ID;
+                pthread_t job_thread_ID=0;
                 pthread_create(&job_thread_ID, NULL, job_thread, NULL); ///--------------->LEAKS
                 insertFront(thread_list,&job_thread_ID);
                 iter_job++;
@@ -1251,7 +1251,7 @@ int main(int argc, char* argv[]) {
         struct sockaddr_in client_addr;
         unsigned int client_addr_len = sizeof(client_addr);
 
-        pthread_t tid;
+        pthread_t tid=0;
 
         while(1){
             // Wait and Accept the connection from client
@@ -1314,7 +1314,7 @@ int main(int argc, char* argv[]) {
                                 to_send->msg_type=0x00;
                                 wr_msg(client_fd,to_send,NULL);
                             //create client thread
-                                pthread_t clientID;
+                                pthread_t clientID=0;
                                 pthread_create(&clientID, NULL, client_thread, (void*)cur_user); 
                                 if(is_debug==1)printf("existing account logged in\n");
                         }
@@ -1358,7 +1358,7 @@ int main(int argc, char* argv[]) {
                         to_send->msg_type=0x00;
                         wr_msg(client_fd,to_send,NULL);
                     //create client thread with client_fd as argument to continue communication
-                        pthread_t clientID;
+                        pthread_t clientID=0;
                         pthread_create(&clientID, NULL, client_thread, (void*)new_user); ///------------------->LEAKS
                         insertFront(thread_list,&clientID);
                         if(is_debug==1)printf("new account logged in\n");
