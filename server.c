@@ -130,7 +130,10 @@ void handle_sigint(int sig) {
             printf("- cancel all thread\n");
             while(thread_list->length>0){
                 pthread_t* cur_thread=(pthread_t*)removeFront(thread_list);
+                //pthread_cancel(*cur_thread);
+                free(cur_thread);
             }
+            free(thread_list);
         }
     //exit success
         exit(EXIT_SUCCESS);
@@ -430,10 +433,11 @@ void* client_thread(void* user_ptr){
     while(1) {
       	job_t* job = (job_t*)malloc(sizeof(job_t));
   		job->requestor = user;
-        job->job_protocol=malloc(sizeof(petr_header));
+        job->job_protocol=malloc(sizeof(petr_header));//----------------------->LEAK
         int err = rd_msgheader(user->file_descriptor, job->job_protocol);
       	if (err == 0) {
             if (job->job_protocol->msg_type == 0x11){ 
+                free(job->job_protocol);
               	free(job); 
                 if(is_debug==1)printf("%s have logged out\n",user->username);
                         petr_header* to_send=malloc(sizeof(petr_header));
@@ -468,6 +472,7 @@ void* client_thread(void* user_ptr){
             } // end else
         } // end if
         else{
+            free(job->job_protocol);
           	free(job);
             if(is_debug==1)printf("%s have logged out with controlC\n",user->username);
           	user->is_online=0;
@@ -1229,15 +1234,15 @@ int main(int argc, char* argv[]) {
             thread_list=malloc(sizeof(List_t));
             sem_init(&job_empty_mutex,0,0);
         //spawn tick thread and N job threads
-            pthread_t tickID=0;
-            pthread_create(&tickID, NULL, tick_thread, NULL); ///-------------------------.LEAKS
-            insertFront(thread_list,&tickID);
+            pthread_t* tickID=malloc(sizeof(pthread_t));
+            pthread_create(tickID, NULL , tick_thread, NULL); ///-------------------------.LEAKS
+            insertFront(thread_list,tickID);
             int iter_job=0;
             while(iter_job<num_job_thread){
                 if(is_debug==1)printf("job thread created\n");
-                pthread_t job_thread_ID=0;
-                pthread_create(&job_thread_ID, NULL, job_thread, NULL); ///--------------->LEAKS
-                insertFront(thread_list,&job_thread_ID);
+                pthread_t* job_thread_ID=malloc(sizeof(pthread_t));
+                pthread_create(job_thread_ID, NULL, job_thread, NULL); ///--------------->LEAKS
+                insertFront(thread_list,job_thread_ID);
                 iter_job++;
             }
         user_list=(List_t*)malloc(sizeof(List_t));
@@ -1314,8 +1319,9 @@ int main(int argc, char* argv[]) {
                                 to_send->msg_type=0x00;
                                 wr_msg(client_fd,to_send,NULL);
                             //create client thread
-                                pthread_t clientID=0;
-                                pthread_create(&clientID, NULL, client_thread, (void*)cur_user); 
+                                pthread_t* clientID=malloc(sizeof(pthread_t));
+                                pthread_create(clientID, NULL, client_thread, (void*)cur_user); 
+                                insertFront(thread_list,clientID);
                                 if(is_debug==1)printf("existing account logged in\n");
                         }
                         is_new_account=0;
@@ -1358,9 +1364,9 @@ int main(int argc, char* argv[]) {
                         to_send->msg_type=0x00;
                         wr_msg(client_fd,to_send,NULL);
                     //create client thread with client_fd as argument to continue communication
-                        pthread_t clientID=0;
-                        pthread_create(&clientID, NULL, client_thread, (void*)new_user); ///------------------->LEAKS
-                        insertFront(thread_list,&clientID);
+                        pthread_t* clientID=malloc(sizeof(pthread_t));
+                        pthread_create(clientID, NULL, client_thread, (void*)new_user); ///------------------->LEAKS
+                        insertFront(thread_list,clientID);
                         if(is_debug==1)printf("new account logged in\n");
                 }
                 free(to_send);
