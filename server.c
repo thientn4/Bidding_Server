@@ -35,9 +35,10 @@
 //////////////////////////////////////////////////SHARED RESOURCE///////////////////////////////////////////////
 
 int auction_ID = 1;
-List_t* user_list;
-List_t* auction_list;
-List_t* job_queue;		// job buffer
+List_t* user_list = NULL;
+List_t* auction_list = NULL;
+List_t* job_queue = NULL;		// job buffer
+List_t* thread_list = NULL;
 
 int num_job_thread = 2;	// default number of job threads
 int tick_second = 0 ;	// default tick in seconds (when 0 -> tick for each stdin input)
@@ -47,11 +48,93 @@ char* auction_file_name = NULL;
 int listen_fd; //server listening file directory
 char buffer[BUFFER_SIZE]; //to receive message from client
 
-user_t* server_fake;
+user_t* server_fake = NULL;
 
 sem_t job_empty_mutex;
 
-int is_debug=1;
+int is_debug=0;
+
+/////////////////////////////////////////////MEMORY CLEANING FUNCTION////////////////////////////////////////////////
+void freeAuction(auction_t* auction) {
+    if(auction==NULL)return;
+    printf("- free auction with ID = %d\n",auction->ID);
+	free(auction->item_name);
+    while(auction->watching_users->length>0)removeFront(auction->watching_users);
+    free(auction->watching_users);
+  	free(auction);
+}
+
+void freeListAuctions(List_t* list) {
+    if(list==NULL)return;
+  	if (list->length == 0) {
+      	free(list);
+        return;
+    }
+    while (list->length>0){  
+        auction_t* auction = (auction_t*)removeFront(list);
+      	freeAuction(auction);
+    }
+  	free(list);
+}
+
+void freeUser(user_t* user) {
+    if(user==NULL)return;
+    printf("- free user with username = %s\n",user->username);
+    free(user->username);
+  	free(user->password);
+  	freeListAuctions(user->won_auctions);
+    while(user->listing_auctions->length>0)removeFront(user->listing_auctions);
+    free(user->listing_auctions);
+  	free(user);
+}
+
+void freeListUsers(List_t* list) {
+    if(list==NULL)return;
+  	if (list->length == 0) {
+      	free(list);
+        return;
+    }
+    while (list->length>0){  
+        user_t* user = (user_t*)removeFront(list);
+      	freeUser(user);
+    }
+    free(list);
+}
+
+void handle_sigint(int sig) {
+  	//print to check while debuging
+  		printf("you just pressed control-C\n");
+  	//free uncompleted auctions in auction_list
+  		if(auction_list!=NULL){
+            printf("- free auction_list\n");
+            freeListAuctions(auction_list);
+        }
+  	//free completed auction in won_auctions of each user and free user_list
+  		if(user_list!=NULL){
+            printf("- free user_list\n");
+            freeListUsers(user_list);
+        }
+  	//free job_queue
+  		if(job_queue!=NULL){
+            printf("- free job_queue\n");
+  			while(job_queue->length>0){
+          		job_t* removed_job=(job_t*)removeFront(job_queue);
+          		free(removed_job->job_body);
+          		free(removed_job->job_protocol);
+          		free(removed_job);
+        	}
+  			free(job_queue);
+        }
+    //end all thread
+        if(thread_list!=NULL){
+            printf("- cancel all thread\n");
+            while(thread_list->length>0){
+                pthread_t* cur_thread=(pthread_t*)removeFront(thread_list);
+            }
+        }
+    //exit success
+        exit(EXIT_SUCCESS);
+}
 
 ///////////////////////////////////////////////////HELPER FUNCTION///////////////////////////////////////////////////
 
@@ -78,7 +161,7 @@ char* myStrcpy(char* source){//------------------------> this malloc new space
 }
 
 char* intToStr(int source){//------------------------> this malloc new space
-    char* to_return=malloc(1);
+    char* to_return=malloc(2);
     if(source==0){
         *to_return='0';
         *(to_return+1)='\0';
@@ -366,7 +449,7 @@ void* client_thread(void* user_ptr){
                 job->job_body = NULL;
                 if(job->job_protocol->msg_type==0x20||job->job_protocol->msg_type==0x24||job->job_protocol->msg_type==0x25||job->job_protocol->msg_type==0x26){
                     read(user->file_descriptor, client_buffer, BUFFER_SIZE); /////-------------------->to read message body
-                    job->job_body = client_buffer;
+                    job->job_body = myStrcpy(client_buffer);
                 }
                     if(is_debug==1)printf("+---------------new_job_info----------------\n");
                     if(is_debug==1)printf("|       job type: %d\n",job->job_protocol->msg_type);
@@ -1003,6 +1086,10 @@ void* job_thread(){
               	free(bal);
                 sem_post(&(cur_job->requestor->mutex));
             }
+            
+            if(cur_job->job_body!=NULL)free(cur_job->job_body);
+            free(cur_job->job_protocol);
+            free(cur_job);
         }
     }
 }
@@ -1021,6 +1108,7 @@ void printTest(){
 }
 
 int main(int argc, char* argv[]) {
+        signal(SIGINT, handle_sigint);
     ///////////////////////////////////PARSING INPUT COMMAND///////////////////////////////////////////
         if (argc < 3){
             printInstructions();
@@ -1059,28 +1147,33 @@ int main(int argc, char* argv[]) {
                 return EXIT_FAILURE;
             }
         }
-
         //--------------------------------------------------------------TESTING
         //printf("auction_file_name = %s\n",auction_file_name);
 
     ////////////////////////////////PREFILLING LIST AND INITIALISE GLOBAL VAR/////////////////////////////
+        
             server_fake=malloc(sizeof(user_t));
             sem_init(&(server_fake->mutex),0,1);
-			server_fake->username="fake";
-			server_fake->password="fake";
+			server_fake->username=myStrcpy("fake");
+			server_fake->password=myStrcpy("fake");
 			server_fake->won_auctions=malloc(sizeof(List_t));///////remember to free this
+            server_fake->won_auctions->length=0;
             sem_init(&(server_fake->won_auctions->mutex),0,1);
             server_fake->won_auctions->comparator= List_tComparator;
 			server_fake->listing_auctions=malloc(sizeof(List_t));//////free this too
+            server_fake->listing_auctions->length=0;
             sem_init(&(server_fake->listing_auctions->mutex),0,1);
             server_fake->listing_auctions->comparator= List_tComparator;
 			server_fake->balance=0;
 			server_fake->file_descriptor=-1;/////////not sure if I should set this to -1
 			server_fake->is_online=0;
+        
         auction_list = (List_t*)malloc(sizeof(List_t));
+        auction_list->length=0;
         sem_init(&(auction_list->mutex),0,1);
         auction_list->comparator= List_tComparator;
   		// if auction_file_name == NULL, ignore
+        
   		if (auction_file_name != NULL) {
           	// opens file, prefills auctions list
           	FILE* fp = fopen(auction_file_name, "r");
@@ -1115,6 +1208,7 @@ int main(int argc, char* argv[]) {
                   	auc->creator = server_fake;
                   	auc->cur_bid_amount = 0;
                   	auc->watching_users = malloc(sizeof(List_t));
+                    auc->watching_users->length=0;
                     sem_init(&(auc->watching_users->mutex),0,1);
                     auc->cur_highest_bidder=NULL;
                     if(is_debug==1)printf("cur_highest_bidder=NULL\n");
@@ -1129,25 +1223,31 @@ int main(int argc, char* argv[]) {
           	auc = NULL; 	// avoiding future error 
           	free(cur);
         }
+        
 
     /////////////////////////////////////////RUN SERVER////////////////////////////////////////////////
+            thread_list=malloc(sizeof(List_t));
             sem_init(&job_empty_mutex,0,0);
         //spawn tick thread and N job threads
             pthread_t tickID;
-            pthread_create(&tickID, NULL, tick_thread, NULL); 
+            pthread_create(&tickID, NULL, tick_thread, NULL); ///-------------------------.LEAKS
+            insertFront(thread_list,&tickID);
             int iter_job=0;
             while(iter_job<num_job_thread){
+                if(is_debug==1)printf("job thread created\n");
                 pthread_t job_thread_ID;
-                pthread_create(&job_thread_ID, NULL, job_thread, NULL);
+                pthread_create(&job_thread_ID, NULL, job_thread, NULL); ///--------------->LEAKS
+                insertFront(thread_list,&job_thread_ID);
                 iter_job++;
             }
         user_list=(List_t*)malloc(sizeof(List_t));
+        user_list->length=0;
             insertRear(user_list,(void*)server_fake);
         sem_init(&(user_list->mutex),0,1);
         job_queue=(List_t*)malloc(sizeof(List_t));
+        job_queue->length=0;
         sem_init(&(job_queue->mutex),0,1);
         listen_fd = server_init(server_port); // Initiate server and start listening on specified port
-        int client_fd;
         struct sockaddr_in client_addr;
         unsigned int client_addr_len = sizeof(client_addr);
 
@@ -1156,20 +1256,19 @@ int main(int argc, char* argv[]) {
         while(1){
             // Wait and Accept the connection from client
             if(is_debug==1)printf("Wait for new client connection\n");
-            int* client_fd = malloc(sizeof(int));
-            *client_fd = accept(listen_fd, (SA*)&client_addr, &client_addr_len);
+            int client_fd = accept(listen_fd, (SA*)&client_addr, &client_addr_len);
 
 
             if(is_debug==1)printTest();
 
-            if (*client_fd < 0) {
+            if (client_fd < 0) {
                 if(is_debug==1)printf("server acccept failed\n");
                 exit(EXIT_FAILURE);
             }
             else{
                 if(is_debug==1)printf("Client connetion accepted\n");
                 bzero(buffer, BUFFER_SIZE);
-                read(*client_fd, buffer, BUFFER_SIZE);
+                read(client_fd, buffer, BUFFER_SIZE);
                 char* msgbody = buffer+8;
                 char* username_check=msgbody;
                 char* password_check=msgbody;
@@ -1196,7 +1295,7 @@ int main(int argc, char* argv[]) {
                                 //send message with type=0x1B and name=EWRNGPWD
                                     to_send->msg_len=0;
                                     to_send->msg_type=0x1B;
-                                    wr_msg(*client_fd,to_send,NULL);
+                                    wr_msg(client_fd,to_send,NULL);
                                     if(is_debug==1)printf("incorrect password\n");
                             }
         
@@ -1204,16 +1303,16 @@ int main(int argc, char* argv[]) {
                                 //send message with type=0x1A and name=EUSRLGDIN
                                     to_send->msg_len=0;
                                     to_send->msg_type=0x1A;
-                                    wr_msg(*client_fd,to_send,NULL);
+                                    wr_msg(client_fd,to_send,NULL);
                                     if(is_debug==1)printf("account is being used\n");
                             }
                         }else{
-                                cur_user->file_descriptor=*client_fd;
+                                cur_user->file_descriptor=client_fd;
                                 cur_user->is_online=1;
                             //send message with type=0x00 and name=OK
                                 to_send->msg_len=0;
                                 to_send->msg_type=0x00;
-                                wr_msg(*client_fd,to_send,NULL);
+                                wr_msg(client_fd,to_send,NULL);
                             //create client thread
                                 pthread_t clientID;
                                 pthread_create(&clientID, NULL, client_thread, (void*)cur_user); 
@@ -1235,12 +1334,14 @@ int main(int argc, char* argv[]) {
                         new_user->username=myStrcpy(username_check);
                         new_user->password=myStrcpy(password_check);
                         new_user->won_auctions=malloc(sizeof(List_t));
+                        new_user->won_auctions->length=0;
                         sem_init(&(new_user->won_auctions->mutex),0,1);
                         new_user->won_auctions->comparator= List_tComparator;
                         new_user->listing_auctions=malloc(sizeof(List_t));
+                        new_user->listing_auctions->length=0;
                         sem_init(&(new_user->listing_auctions->mutex),0,1);
                         new_user->listing_auctions->comparator= List_tComparator;
-                        new_user->file_descriptor=*client_fd;
+                        new_user->file_descriptor=client_fd;
                         new_user->balance=0;
                         new_user->is_online=1;
                   
@@ -1255,10 +1356,11 @@ int main(int argc, char* argv[]) {
                     //send message with type=0x00 and name=OK
                         to_send->msg_len=0;
                         to_send->msg_type=0x00;
-                        wr_msg(*client_fd,to_send,NULL);
+                        wr_msg(client_fd,to_send,NULL);
                     //create client thread with client_fd as argument to continue communication
                         pthread_t clientID;
-                        pthread_create(&clientID, NULL, client_thread, (void*)new_user); 
+                        pthread_create(&clientID, NULL, client_thread, (void*)new_user); ///------------------->LEAKS
+                        insertFront(thread_list,&clientID);
                         if(is_debug==1)printf("new account logged in\n");
                 }
                 free(to_send);
