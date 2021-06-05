@@ -6,11 +6,11 @@ typedef struct user {
     int balance;
     int file_descriptor;
     int is_online;
-  	sem_t mutex;
+    sem_t mutex;
 } user_t;
 
 typedef struct auction {
-		user_t* creator;
+    user_t* creator;
     user_t* cur_highest_bidder;
     char* item_name;
     List_t* watching_users;
@@ -18,11 +18,11 @@ typedef struct auction {
     int max_bid_amount;
     int ID;
     int duration;
-  	sem_t mutex;
+    sem_t mutex;
 } auction_t;
 
-typedef struct job {
+typedef struct job{
     petr_header* job_protocol;  //type of job to decide what to do
     char* job_body;             //extra argument if needed for job such as auction creating
     user_t* requestor;           //to send result to the client requesting the job
-} job_t;
+}job_t;
