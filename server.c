@@ -56,21 +56,24 @@ int is_debug=1;
 
 /////////////////////////////////////////////MEMORY CLEANING FUNCTION////////////////////////////////////////////////
 void freeAuction(auction_t* auction) {
-    if(auction==NULL)return;
+    if (auction == NULL)
+	    return;
     printf("- free auction with ID = %d\n",auction->ID);
 	free(auction->item_name);
-    while(auction->watching_users->length>0)removeFront(auction->watching_users);
+    while (auction->watching_users->length>0)
+		removeFront(auction->watching_users);
     free(auction->watching_users);
   	free(auction);
 }
 
 void freeListAuctions(List_t* list) {
-    if(list==NULL)return;
+    if (list == NULL)
+		return;
   	if (list->length == 0) {
       	free(list);
         return;
     }
-    while (list->length>0){  
+    while (list->length > 0) {  
         auction_t* auction = (auction_t*)removeFront(list);
       	freeAuction(auction);
     }
@@ -78,23 +81,26 @@ void freeListAuctions(List_t* list) {
 }
 
 void freeUser(user_t* user) {
-    if(user==NULL)return;
-    printf("- free user with username = %s\n",user->username);
+    if (user == NULL)
+		return;
+    printf("- free user with username = %s\n", user->username);
     free(user->username);
   	free(user->password);
   	freeListAuctions(user->won_auctions);
-    while(user->listing_auctions->length>0)removeFront(user->listing_auctions);
+    while (user->listing_auctions->length>0)
+		removeFront(user->listing_auctions);
     free(user->listing_auctions);
   	free(user);
 }
 
 void freeListUsers(List_t* list) {
-    if(list==NULL)return;
+    if (list == NULL)
+		return;
   	if (list->length == 0) {
       	free(list);
         return;
     }
-    while (list->length>0){  
+    while (list->length > 0) {  
         user_t* user = (user_t*)removeFront(list);
       	freeUser(user);
     }
@@ -105,20 +111,20 @@ void handle_sigint(int sig) {
   	//print to check while debuging
   		printf("you just pressed control-C\n");
   	//free uncompleted auctions in auction_list
-  		if(auction_list!=NULL){
+  		if (auction_list != NULL) {
             printf("- free auction_list\n");
             freeListAuctions(auction_list);
         }
   	//free completed auction in won_auctions of each user and free user_list
-  		if(user_list!=NULL){
+  		if (user_list != NULL){
             printf("- free user_list\n");
             freeListUsers(user_list);
         }
   	//free job_queue
-  		if(job_queue!=NULL){
+  		if (job_queue != NULL){
             printf("- free job_queue\n");
-  			while(job_queue->length>0){
-          		job_t* removed_job=(job_t*)removeFront(job_queue);
+  			while(job_queue->length > 0){
+          		job_t* removed_job = (job_t*)removeFront(job_queue);
           		free(removed_job->job_body);
           		free(removed_job->job_protocol);
           		free(removed_job);
@@ -126,11 +132,10 @@ void handle_sigint(int sig) {
   			free(job_queue);
         }
     //end all thread
-        if(thread_list!=NULL){
+        if (thread_list != NULL){
             printf("- cancel all thread\n");
-            while(thread_list->length>0){
-                pthread_t* cur_thread=(pthread_t*)removeFront(thread_list);
-                //pthread_cancel(*cur_thread);
+            while (thread_list->length > 0) {
+                pthread_t* cur_thread = (pthread_t*)removeFront(thread_list);
                 free(cur_thread);
             }
             free(thread_list);
@@ -150,50 +155,50 @@ void printInstructions(){
     printf("AUCTION_FILENAME    File to read auction item information from at the start of the server.\n");
 }
 
-char* myStrcpy(char* source){//------------------------> this malloc new space
-    char* to_return=malloc(1);
-    int size=1;
-    while(*source!='\0'){
-        *(to_return+size-1)=*source;
-        to_return=realloc(to_return,size+1);
+char* myStrcpy(char* source) {
+    char* to_return = malloc(sizeof(char));
+    int size = 1;
+    while(*source != '\0'){
+        *(to_return + size - 1) = *source;
+        to_return = realloc(to_return, size+1);
         source++;
         size++;
     }
-    *(to_return+size-1)='\0';
+    *(to_return+size-1) = '\0';
     return to_return;
 }
 
-char* intToStr(int source){//------------------------> this malloc new space
-    char* to_return=malloc(2);
-    if(source==0){
-        *to_return='0';
-        *(to_return+1)='\0';
+char* intToStr(int source) {
+    char* to_return = malloc(sizeof(char) * 2);
+    if (source == 0) {
+        *to_return = '0';
+        *(to_return + 1) = '\0';
         return to_return;
     }
-    int size=1;
-    while(source!=0){
-        *(to_return+size-1)=source%10+48;
-        to_return=realloc(to_return,size+1);
-        source/=10;
+    int size = 1;
+    while (source != 0) {
+        *(to_return + size - 1) = source % 10 + 48;
+        to_return = realloc(to_return, size + 1);
+        source /= 10;
         size++;
     }
-    int iter_flip=0;
-    while(iter_flip<(size-1)/2){
-        char holder=*(to_return+iter_flip);
-        *(to_return+iter_flip)=*(to_return+size-2-iter_flip);
-        *(to_return+size-2-iter_flip)=holder;
+    int iter_flip = 0;
+    while (iter_flip < (size - 1) / 2) {
+        char holder = *(to_return + iter_flip);
+        *(to_return + iter_flip) = *(to_return + size - 2 - iter_flip);
+        *(to_return + size - 2 - iter_flip) = holder;
         iter_flip++;
     }
-    *(to_return+size-1)='\0';
+    *(to_return + size - 1) = '\0';
     return to_return;
 }
 
-auction_t* searchAuction(int search_ID){
+auction_t* searchAuction(int search_ID) {
   	sem_wait(&(auction_list->mutex));
-    node_t* iter=auction_list->head;
-    while(iter!=NULL){
-        auction_t* cur_auc=(auction_t*)(iter->value);////////////should this be blocked too?
-        if(cur_auc->ID==search_ID){
+    node_t* iter = auction_list->head;
+    while (iter != NULL){
+        auction_t* cur_auc = (auction_t*)(iter->value);
+        if (cur_auc->ID == search_ID) {
           	sem_post(&(auction_list->mutex));
           	return cur_auc;
         }
@@ -204,9 +209,9 @@ auction_t* searchAuction(int search_ID){
 }
 
 int myStrlen(char* to_count){
-    int to_return=0;
-    char* count_iter=to_count;
-    while(*count_iter!='\0'){
+    int to_return = 0;
+    char* count_iter = to_count;
+    while (*count_iter != '\0') {
         count_iter++;
         to_return++;
     }
@@ -214,22 +219,25 @@ int myStrlen(char* to_count){
 }
 
 int myAtoi(char* source){
-    int to_return=0;
-    char* atoi_iter=source;
-    while(*atoi_iter<='9'&&*atoi_iter>='0'){
-        to_return*=10;
-        to_return+=*atoi_iter-'0';
+    int to_return = 0;
+    char* atoi_iter = source;
+    while(*atoi_iter <= '9' && *atoi_iter >= '0'){
+        to_return *= 10;
+        to_return += *atoi_iter - '0';
         atoi_iter++;
     }
     return to_return;
 }
 
 void printMsg(char* input){
-    char* iter=input;
-    while(*iter!='\0'){
-        if(*iter=='\n')printf("\\n");
-        else if(*iter=='\r')printf("\\r");
-        else printf("%c",*iter);
+    char* iter = input;
+    while (*iter != '\0'){
+        if (*iter == '\n')
+			printf("\\n");
+        else if (*iter=='\r')
+			printf("\\r");
+        else 
+			printf("%c",*iter);
         iter++;
     }
     printf("\n");
@@ -274,18 +282,20 @@ int List_tComparator(void* lhs, void* rhs) {
 }
 
 /////////////////////////////////////INITIATE SOCKET IN SERVER//////////////////////////////////////////
-    int server_init(int server_port){
+    int server_init(int server_port) {
         int sockfd;
         struct sockaddr_in servaddr;
 
         // socket create and verification
         sockfd = socket(AF_INET, SOCK_STREAM, 0);
         if (sockfd == -1) {
-            if(is_debug==1)printf("socket creation failed...\n");
+            if (is_debug==1)
+				printf("socket creation failed...\n");
             exit(EXIT_FAILURE);
         }
         else
-            if(is_debug==1)printf("Socket successfully created\n");
+            if (is_debug==1)
+				printf("socket successfully created\n");
 
         bzero(&servaddr, sizeof(servaddr));
 
@@ -295,26 +305,29 @@ int List_tComparator(void* lhs, void* rhs) {
         servaddr.sin_port = htons(server_port);
 
         int opt = 1;
-        if(setsockopt(sockfd, SOL_SOCKET, SO_REUSEPORT, (char *)&opt, sizeof(opt))<0)
-        {
-        perror("setsockopt");exit(EXIT_FAILURE);
+        if (setsockopt(sockfd, SOL_SOCKET, SO_REUSEPORT, (char*)&opt, sizeof(opt)) < 0) {
+        	perror("setsockopt");exit(EXIT_FAILURE);
         }
 
         // Binding newly created socket to given IP and verification
         if ((bind(sockfd, (SA*)&servaddr, sizeof(servaddr))) != 0) {
-            if(is_debug==1)printf("socket bind failed\n");
+            if (is_debug == 1)
+				printf("socket bind failed\n");
             exit(EXIT_FAILURE);
         }
         else
-            if(is_debug==1)printf("Socket successfully binded\n");
+            if (is_debug == 1)
+				printf("Socket successfully binded\n");
 
         // Now server is ready to listen and verification
         if ((listen(sockfd, 1)) != 0) {
-            if(is_debug==1)printf("Listen failed\n");
+            if (is_debug == 1)
+				printf("Listen failed\n");
             exit(EXIT_FAILURE);
         }
         else
-            if(is_debug==1)printf("Server listening on port: %d.. Waiting for connection\n", server_port);
+            if (is_debug == 1)
+				printf("Server listening on port: %d.. Waiting for connection\n", server_port);
 
         return sockfd;
     }
@@ -323,7 +336,7 @@ int List_tComparator(void* lhs, void* rhs) {
 
 void* tick_thread() {
   // int client_fd = *(int*)clientfd_ptr;
-  int count_tick=0;
+  int count_tick = 0;
   while(1) {
     count_tick++;
     if (tick_second == 0) {
@@ -334,37 +347,40 @@ void* tick_thread() {
     else 
     	sleep(1);
 
-    if(is_debug==1)printf("%d ticked!\n",count_tick);
+    if (is_debug == 1)
+		printf("%d ticked!\n", count_tick);
 
     int i = 0;
     node_t* head = auction_list->head;
     node_t* current = head;
     while (current != NULL) { 
-      	//sem_wait(&(auction_list->mutex));--------------------------------> should not be here since we need to remove by index
-      
       	auction_t* cur_auc = (auction_t*)(current->value);
         sem_wait(&(cur_auc->mutex));
         cur_auc->duration -= 1;
         if (cur_auc->duration == 0) {
-            if(is_debug==1)printf("removing auction with itemname: %s\n",cur_auc->item_name );
+            if(is_debug==1)
+				printf("removing auction with itemname: %s\n", cur_auc->item_name);
             current = current->next;
             sem_wait(&(auction_list->mutex)); 
-            removeByIndex(auction_list, i); // removing by index isn't enough: I need to free
+            removeByIndex(auction_list, i); 
             sem_post(&(auction_list->mutex));
+			
             /////////////////////update winner and notify other watcher with 0x22 and message aucID\r\nwinner_name\r\nwin_price or aucID\r\n\r\n
-            petr_header* to_send=malloc(sizeof(petr_header));
+            petr_header* to_send = malloc(sizeof(petr_header));
             char* message;
-            if(is_debug==1)printf("check for winner\n");
-            user_t* highest=cur_auc->cur_highest_bidder; 
-            if(highest==NULL){
-                if(is_debug==1)printf("no winner for this ended auction\n");
-                char* ID_str=intToStr(cur_auc->ID);
-                message=malloc(myStrlen(ID_str)+5);
-                *message='\0';
-                myStrcat(message,ID_str);
-                myStrcat(message,"\r\n\r\n");
-                to_send->msg_type=0x22;
-                to_send->msg_len=myStrlen(message)+1;
+            if (is_debug == 1)
+				printf("check for winner\n");
+            user_t* highest = cur_auc->cur_highest_bidder; 
+            if (highest == NULL){
+                if (is_debug == 1)
+					printf("no winner for this ended auction\n");
+                char* ID_str = intToStr(cur_auc->ID);
+                message = malloc(myStrlen(ID_str) + 5);
+                *message = '\0';
+                myStrcat(message, ID_str);
+                myStrcat(message, "\r\n\r\n");
+                to_send->msg_type = 0x22;
+                to_send->msg_len = myStrlen(message) + 1;
                 free(ID_str);
             }
           	else {
